@@ -1,0 +1,37 @@
+plugins {
+  id "com.android.library"
+}
+
+def isReactNativeHostBuild = rootProject.name != "debugbundle-react-native"
+if (isReactNativeHostBuild) {
+  apply plugin: "com.facebook.react"
+}
+
+def hostKotlinVersion = rootProject.ext.has("kotlinVersion")
+  ? rootProject.ext.get("kotlinVersion")
+  : "2.1.20"
+
+android {
+  namespace "com.debugbundle.reactnative"
+  compileSdk 36
+
+  defaultConfig {
+    minSdk 23
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}
+
+dependencies {
+  compileOnly "com.facebook.react:react-android:${rootProject.findProperty("reactNativeVersion") ?: "0.85.3"}"
+  implementation "org.jetbrains.kotlin:kotlin-stdlib:${hostKotlinVersion}"
+  implementation platform("com.debugbundle:debugbundle-android-bom:0.1.2")
+  implementation("com.debugbundle:debugbundle-android") {
+    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
+    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"
+    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"
+  }
+}

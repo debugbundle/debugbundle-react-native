@@ -1,0 +1,88 @@
+{
+  "name": "@debugbundle/sdk-react-native",
+  "version": "0.1.0",
+  "description": "React Native SDK for DebugBundle mobile event capture.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "react-native": "./src/index.ts",
+  "codegenConfig": {
+    "name": "DebugBundleReactNativeSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "android": {
+      "javaPackageName": "com.debugbundle.reactnative"
+    },
+    "ios": {
+      "modulesProvider": {
+        "DebugBundleReactNative": "DebugBundleReactNative"
+      }
+    }
+  },
+  "files": [
+    "android/build.gradle",
+    "android/src",
+    "ios",
+    "src",
+    "dist",
+    "app.plugin.js",
+    "DebugBundleReactNative.podspec",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./network": {
+      "types": "./dist/network.d.ts",
+      "default": "./dist/network.js"
+    },
+    "./navigation": {
+      "types": "./dist/navigation.d.ts",
+      "default": "./dist/navigation.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./console": {
+      "types": "./dist/console.d.ts",
+      "default": "./dist/console.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "pack:check": "npm pack --dry-run"
+  },
+  "peerDependencies": {
+    "@expo/config-plugins": ">=9",
+    "@react-navigation/native": ">=6",
+    "react": ">=18",
+    "react-native": ">=0.84"
+  },
+  "peerDependenciesMeta": {
+    "@expo/config-plugins": {
+      "optional": true
+    },
+    "@react-navigation/native": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  }
+}

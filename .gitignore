@@ -1,0 +1,13 @@
+dist/
+node_modules/
+coverage/
+.smoke/
+.gradle-cache/
+.gradle-cache-rn-smoke/
+.gradle/
+.kotlin/
+build/
+*.tgz
+android/build/
+android/.gradle/
+ios/Pods/
