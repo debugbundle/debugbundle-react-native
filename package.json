@@ -4,6 +4,17 @@
   "description": "React Native SDK for DebugBundle mobile event capture.",
   "license": "AGPL-3.0-only",
   "type": "module",
+  "homepage": "https://github.com/debugbundle/debugbundle-react-native#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/debugbundle/debugbundle-react-native.git"
+  },
+  "bugs": {
+    "url": "https://github.com/debugbundle/debugbundle-react-native/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "react-native": "./src/index.ts",

@@ -10,12 +10,15 @@ const androidModule = readFileSync(
 const androidBuildGradle = readFileSync(new URL("../android/build.gradle", import.meta.url), "utf8");
 const iosModule = readFileSync(new URL("../ios/DebugBundleReactNative.swift", import.meta.url), "utf8");
 const ci = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+const release = readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
 
 describe("repository package and release gates", () => {
   it("declares the publishable React Native package shape", () => {
     expect(packageJson.name).toBe("@debugbundle/sdk-react-native");
     expect(packageJson.main).toBe("./dist/index.js");
     expect(packageJson.types).toBe("./dist/index.d.ts");
+    expect(packageJson.repository.url).toBe("git+https://github.com/debugbundle/debugbundle-react-native.git");
+    expect(packageJson.publishConfig.access).toBe("public");
     expect(packageJson.exports).toHaveProperty("./network");
     expect(packageJson.exports).toHaveProperty("./navigation");
     expect(packageJson.exports).toHaveProperty("./react");
@@ -62,5 +65,15 @@ describe("repository package and release gates", () => {
     expect(ci).toContain("make rn-smoke-android");
     expect(ci).toContain("make rn-smoke-ios");
     expect(ci).not.toContain("secrets.");
+  });
+
+  it("publishes the npm package only through an explicit release workflow", () => {
+    expect(release).toContain("tags:");
+    expect(release).toContain("Validate tag matches package version");
+    expect(release).toContain("make verify");
+    expect(release).toContain("npm run build");
+    expect(release).toContain("npm pack --dry-run");
+    expect(release).toContain("secrets.NPM_TOKEN");
+    expect(release).toContain("npm publish --access public");
   });
 });

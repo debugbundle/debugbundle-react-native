@@ -118,3 +118,7 @@ export function AppNavigation() {
 ## Expo
 
 Expo development builds and prebuild are supported through the config plugin. Expo Go cannot load the native module, so the SDK reports degraded status and does not claim durable native queueing, native crash evidence, native device context, or remote-probe parity.
+
+## Release
+
+The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v0.1.0`, and push the tag after the native Swift `DebugBundle` pod is available to CocoaPods consumers.
