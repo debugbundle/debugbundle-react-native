@@ -28,7 +28,7 @@ else
 ANDROID_COMPILE_CMD = $(DOCKER_RUN) gradle --no-daemon --console=plain -Dorg.gradle.vfs.watch=false
 endif
 
-.PHONY: build typecheck test pack smoke android-compile rn-smoke-ios rn-smoke-android rn-smoke verify clean
+.PHONY: build typecheck test pack smoke smoke-registry android-compile rn-smoke-ios rn-smoke-android rn-smoke verify clean
 
 build:
 	npm run build
@@ -45,6 +45,9 @@ pack:
 
 smoke:
 	node scripts/smoke-packed.mjs
+
+smoke-registry:
+	npm run smoke:registry
 
 android-compile:
 	$(ANDROID_COMPILE_CMD) :debugbundle-react-native:compileDebugJavaWithJavac

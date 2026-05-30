@@ -16,7 +16,7 @@ import type {
 } from "./types.js";
 
 const SDK_NAME = "@debugbundle/sdk-react-native" as const;
-const DEFAULT_SDK_VERSION = "0.1.0";
+const DEFAULT_SDK_VERSION = "0.1.1";
 const LOG_LEVELS: Record<DebugBundleLogLevel, number> = {
   debug: 10,
   info: 20,

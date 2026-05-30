@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "DebugBundleReactNative"
-  s.version      = "0.1.0"
+  s.version      = "0.1.1"
   s.summary      = "React Native wrapper for the DebugBundle mobile SDKs."
   s.license      = { :type => "AGPL-3.0-only" }
   s.author       = { "DebugBundle" => "support@debugbundle.com" }

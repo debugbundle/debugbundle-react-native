@@ -53,3 +53,6 @@ jobs:
             sleep 30
           done
           exit 1
+
+      - name: Smoke published package
+        run: npm run smoke:registry

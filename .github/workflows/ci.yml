@@ -18,8 +18,12 @@ jobs:
       - run: make verify
 
   android-static:
-    name: Android bridge compile
+    name: Android bridge compile (RN ${{ matrix.rn-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rn-version: ["0.76.9", "0.82.1", "0.85.3"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -30,7 +34,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.4.1"
-      - run: gradle --no-daemon :debugbundle-react-native:compileDebugJavaWithJavac
+      - run: gradle --no-daemon -PreactNativeVersion=${{ matrix.rn-version }} :debugbundle-react-native:compileDebugJavaWithJavac
 
   android-clean-smoke:
     name: Android clean React Native app smoke

@@ -18,13 +18,24 @@ describe("repository package and release gates", () => {
     expect(packageJson.main).toBe("./dist/index.js");
     expect(packageJson.types).toBe("./dist/index.d.ts");
     expect(packageJson.repository.url).toBe("git+https://github.com/debugbundle/debugbundle-react-native.git");
+    expect(packageJson.homepage).toBe("https://debugbundle.com/docs/sdks/react-native");
     expect(packageJson.publishConfig.access).toBe("public");
+    expect(packageJson.keywords).toContain("react-native");
     expect(packageJson.exports).toHaveProperty("./network");
     expect(packageJson.exports).toHaveProperty("./navigation");
     expect(packageJson.exports).toHaveProperty("./react");
     expect(packageJson.exports).toHaveProperty("./testing");
     expect(packageJson.exports).toHaveProperty("./errors");
     expect(packageJson.exports).toHaveProperty("./console");
+  });
+
+  it("declares broad installed-base React Native support without allowing unknown majors", () => {
+    expect(packageJson.peerDependencies.react).toBe(">=18.2 <20");
+    expect(packageJson.peerDependencies["react-native"]).toBe(">=0.76 <1.0");
+    expect(packageJson.peerDependencies["@react-navigation/native"]).toBe(">=6");
+    expect(readme).toContain("React Native 0.76+");
+    expect(readme).toContain("Current stable React Native 0.85.x");
+    expect(readme).toContain("Android bridge compile on RN 0.76.9, 0.82.1, and 0.85.3");
   });
 
   it("declares TurboModule codegen metadata for both mobile platforms", () => {
@@ -61,7 +72,8 @@ describe("repository package and release gates", () => {
 
   it("runs the mandatory standalone SDK verification gates in CI", () => {
     expect(ci).toContain("make verify");
-    expect(ci).toContain("Android bridge compile");
+    expect(ci).toContain("Android bridge compile (RN ${{ matrix.rn-version }})");
+    expect(ci).toContain('rn-version: ["0.76.9", "0.82.1", "0.85.3"]');
     expect(ci).toContain(":debugbundle-react-native:compileDebugJavaWithJavac");
     expect(ci).toContain("iOS bridge static check");
     expect(ci).toContain("make rn-smoke-android");
@@ -79,5 +91,7 @@ describe("repository package and release gates", () => {
     expect(release).toContain("npm publish --access public");
     expect(release).toContain("Verify npm registry visibility");
     expect(release).toContain("npm view \"@debugbundle/sdk-react-native@${PACKAGE_VERSION}\"");
+    expect(release).toContain("Smoke published package");
+    expect(release).toContain("npm run smoke:registry");
   });
 });

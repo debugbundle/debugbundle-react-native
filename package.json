@@ -1,10 +1,18 @@
 {
   "name": "@debugbundle/sdk-react-native",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React Native SDK for DebugBundle mobile event capture.",
   "license": "AGPL-3.0-only",
   "type": "module",
-  "homepage": "https://github.com/debugbundle/debugbundle-react-native#readme",
+  "homepage": "https://debugbundle.com/docs/sdks/react-native",
+  "keywords": [
+    "debugbundle",
+    "react-native",
+    "mobile",
+    "debugging",
+    "error-tracking",
+    "ai-agent"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/debugbundle/debugbundle-react-native.git"
@@ -75,13 +83,14 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "pack:check": "npm pack --dry-run"
+    "pack:check": "npm pack --dry-run",
+    "smoke:registry": "node scripts/smoke-registry.mjs"
   },
   "peerDependencies": {
     "@expo/config-plugins": ">=9",
     "@react-navigation/native": ">=6",
-    "react": ">=18",
-    "react-native": ">=0.84"
+    "react": ">=18.2 <20",
+    "react-native": ">=0.76 <1.0"
   },
   "peerDependenciesMeta": {
     "@expo/config-plugins": {

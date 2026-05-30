@@ -18,6 +18,18 @@ Published implementation:
 - Android and iOS native wrappers that delegate queueing, config/status, request capture, crash/error capture, flushing, and probe trigger activation to the native SDK foundations.
 - Clean-install React Native app smoke coverage for Android and iOS, including New Architecture codegen/autolinking.
 
+## Runtime Support
+
+| Lane | Support |
+| --- | --- |
+| Minimum compatibility | React Native 0.76+, React 18.2+, iOS 15+, Android minSdk 23 |
+| Recommended production | Current stable React Native 0.85.x with Hermes and the New Architecture enabled where your app supports it |
+| Installed-base compatibility | React Native 0.76 through current stable, including legacy bridge apps |
+| Rolling CI | TypeScript/package smoke, Android bridge compile on RN 0.76.9, 0.82.1, and 0.85.3, plus current-stable Android and iOS clean-app smokes |
+| Expo | Expo development builds and prebuild; Expo Go is degraded because it cannot load custom native modules |
+
+JSC compatibility is best-effort where the selected React Native lane still supports it. Hermes is the primary tested JavaScript engine.
+
 ## Install
 
 ```sh
@@ -119,4 +131,4 @@ Expo development builds and prebuild are supported through the config plugin. Ex
 
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v0.1.0`, and push the tag after the native Swift `DebugBundle` pod version referenced by `DebugBundleReactNative.podspec` is available to CocoaPods consumers.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v0.1.1`, and push the tag after the native Swift `DebugBundle` pod version referenced by `DebugBundleReactNative.podspec` is available to CocoaPods consumers.
