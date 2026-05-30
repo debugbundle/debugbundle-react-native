@@ -6,7 +6,7 @@ This package targets iOS and Android React Native apps. It is a mobile direct-in
 
 ## Status
 
-Release candidate implementation:
+Published implementation:
 
 - TypeScript facade and instance client.
 - Safe degraded mode when the native module is unavailable, including Expo Go.
@@ -18,8 +18,6 @@ Release candidate implementation:
 - Android and iOS native wrappers that delegate queueing, config/status, request capture, crash/error capture, flushing, and probe trigger activation to the native SDK foundations.
 - Clean-install React Native app smoke coverage for Android and iOS, including New Architecture codegen/autolinking.
 
-Before public npm publication, publish or otherwise make the native `DebugBundle` iOS pod available to CocoaPods consumers. Local smoke tests inject the sibling Swift SDK pod path so the bridge can be validated before registry publication.
-
 ## Install
 
 ```sh
@@ -27,7 +25,7 @@ npm install @debugbundle/sdk-react-native
 cd ios && pod install
 ```
 
-iOS autolinking resolves the `DebugBundleReactNative.podspec`, which depends on the native `DebugBundle` pod from the Swift SDK. Until that pod is published to the public CocoaPods specs repo, local validation must add the Swift SDK pod path to the app Podfile.
+iOS autolinking resolves the `DebugBundleReactNative.podspec`, which depends on the native `DebugBundle` pod from the Swift SDK.
 
 Android apps must enable core library desugaring because the native Android SDK
 uses Java APIs that require desugaring on the SDK's minimum API level:
@@ -121,4 +119,4 @@ Expo development builds and prebuild are supported through the config plugin. Ex
 
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v0.1.0`, and push the tag after the native Swift `DebugBundle` pod is available to CocoaPods consumers.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v0.1.0`, and push the tag after the native Swift `DebugBundle` pod version referenced by `DebugBundleReactNative.podspec` is available to CocoaPods consumers.

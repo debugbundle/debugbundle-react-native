@@ -41,3 +41,15 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
+
+      - name: Verify npm registry visibility
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          for attempt in 1 2 3 4 5; do
+            if npm view "@debugbundle/sdk-react-native@${PACKAGE_VERSION}" version --registry=https://registry.npmjs.org | grep -Fx "${PACKAGE_VERSION}"; then
+              exit 0
+            fi
+            echo "Package not visible on npm yet; retry ${attempt}/5."
+            sleep 30
+          done
+          exit 1

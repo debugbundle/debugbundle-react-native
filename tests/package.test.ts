@@ -42,6 +42,8 @@ describe("repository package and release gates", () => {
     expect(readme).toContain("Expo Go cannot load the native module");
     expect(readme).toContain("does not provide CORS");
     expect(readme).toContain("`allowedOrigins`, `transportMode`, or `/debugbundle/browser` helpers");
+    expect(readme).not.toContain("Before public npm publication");
+    expect(readme).not.toContain("Until that pod is published");
   });
 
   it("delegates platform bridge calls to the native SDK foundations", () => {
@@ -75,5 +77,7 @@ describe("repository package and release gates", () => {
     expect(release).toContain("npm pack --dry-run");
     expect(release).toContain("secrets.NPM_TOKEN");
     expect(release).toContain("npm publish --access public");
+    expect(release).toContain("Verify npm registry visibility");
+    expect(release).toContain("npm view \"@debugbundle/sdk-react-native@${PACKAGE_VERSION}\"");
   });
 });
