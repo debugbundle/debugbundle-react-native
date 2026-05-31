@@ -131,4 +131,4 @@ Expo development builds and prebuild are supported through the config plugin. Ex
 
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v0.1.1`, and push the tag after the native Swift `DebugBundle` pod version referenced by `DebugBundleReactNative.podspec` is available to CocoaPods consumers.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v1.0.0`, and push the tag after the native Swift `DebugBundle` pod version referenced by `DebugBundleReactNative.podspec` is available to CocoaPods consumers.
