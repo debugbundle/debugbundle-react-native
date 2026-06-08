@@ -28,7 +28,7 @@ android {
 dependencies {
   compileOnly "com.facebook.react:react-android:${rootProject.findProperty("reactNativeVersion") ?: "0.85.3"}"
   implementation "org.jetbrains.kotlin:kotlin-stdlib:${hostKotlinVersion}"
-  implementation platform("com.debugbundle:debugbundle-android-bom:1.0.0")
+  implementation platform("com.debugbundle:debugbundle-android-bom:1.1.0")
   implementation("com.debugbundle:debugbundle-android") {
     exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
     exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"

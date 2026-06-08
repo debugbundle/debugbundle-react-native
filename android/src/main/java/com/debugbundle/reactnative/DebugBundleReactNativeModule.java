@@ -187,7 +187,7 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
         0,
         false,
         Collections.emptySet(),
-        stringOrDefault(config, "sdkVersion", "1.0.0"),
+        stringOrDefault(config, "sdkVersion", "1.1.0"),
         mask,
         null);
   }

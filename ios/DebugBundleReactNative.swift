@@ -19,7 +19,7 @@ final class DebugBundleReactNative: NSObject {
 			releaseChannel: config["releaseChannel"] as? String ?? "production",
 			appVersion: config["appVersion"] as? String,
 			buildNumber: config["buildNumber"] as? String,
-			sdkVersion: config["sdkVersion"] as? String ?? "1.0.0"
+			sdkVersion: config["sdkVersion"] as? String ?? "1.1.0"
 		)
 		DebugBundle.initialize(sdkConfig, transport: DebugBundleHTTPTransport())
 		resolve(state())
