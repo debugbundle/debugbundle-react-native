@@ -209,6 +209,7 @@ function runAndroidSmoke() {
     image,
     "./gradlew",
     "--no-daemon",
+    "--max-workers=2",
     "--console=plain",
     "-Dorg.gradle.vfs.watch=false",
     ":app:assembleDebug"
