@@ -1,7 +1,13 @@
 #import <React/RCTBridgeModule.h>
 
 #if defined(RCT_NEW_ARCH_ENABLED) || defined(RCT_REMOVE_LEGACY_ARCH)
+#if __has_include(<ReactCodegen/DebugBundleReactNativeSpec/DebugBundleReactNativeSpec.h>)
 #import <ReactCodegen/DebugBundleReactNativeSpec/DebugBundleReactNativeSpec.h>
+#elif __has_include(<ReactCodegen/DebugBundleReactNativeSpec.h>)
+#import <ReactCodegen/DebugBundleReactNativeSpec.h>
+#else
+#error "DebugBundle React Native codegen header was not generated"
+#endif
 #endif
 
 @interface RCT_EXTERN_MODULE(DebugBundleReactNative, NSObject)

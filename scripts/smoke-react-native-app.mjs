@@ -33,6 +33,7 @@ const skipBuild = args.has("--skip-build");
 const runtimeDelivery = args.has("--runtime");
 const expoDevelopmentBuild = args.has("--expo");
 const mockPort = Number(process.env.RN_SMOKE_MOCK_PORT ?? "18765");
+const runtimeTimeoutMs = Number(process.env.RN_SMOKE_RUNTIME_TIMEOUT_MS ?? "120000");
 if (runtimeDelivery && platforms.length !== 1) {
   throw new Error("Runtime delivery smoke must target exactly one platform");
 }
@@ -41,6 +42,7 @@ if (expoDevelopmentBuild && platforms.length !== 1) {
 }
 let stagedAndroidVersion = null;
 const receivedEventTypes = new Set();
+const runtimeRequestDiagnostics = [];
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -632,8 +634,26 @@ async function runAndroidSmoke() {
   try {
     run("adb", ["install", "-r", apkPath]);
     run("adb", ["shell", "am", "force-stop", "com.debugbundlesmoke"]);
+    run("adb", ["logcat", "-c"], { allowFailure: true });
     run("adb", ["shell", "am", "start", "-n", "com.debugbundlesmoke/.MainActivity"]);
-    await waitForRuntimeEvents();
+    try {
+      await waitForRuntimeEvents();
+    } catch (error) {
+      const processState = run("adb", ["shell", "pidof", "com.debugbundlesmoke"], {
+        allowFailure: true,
+        capture: true
+      }).trim();
+      const logcat = run("adb", ["logcat", "-d", "-t", "500"], {
+        allowFailure: true,
+        capture: true
+      });
+      const logTail = logcat.split(/\r?\n/).slice(-500).join("\n");
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\n` +
+        `Android app pid: ${processState || "not running"}\n` +
+        `Android logcat tail:\n${logTail || "unavailable"}`
+      );
+    }
   } finally {
     await new Promise((resolveClose) => server.close(resolveClose));
   }
@@ -670,6 +690,7 @@ async function startMockIngestion() {
     }
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     if (!Array.isArray(body.events) || body.events.length === 0) {
+      runtimeRequestDiagnostics.push(`invalid_batch:${JSON.stringify(body)}`);
       response.writeHead(400);
       response.end();
       return;
@@ -682,6 +703,7 @@ async function startMockIngestion() {
         event?.context?.release_stage !== "smoke" ||
         typeof event?.event_id !== "string"
       ) {
+        runtimeRequestDiagnostics.push(`invalid_event:${JSON.stringify(event)}`);
         response.writeHead(422);
         response.end();
         return;
@@ -703,14 +725,18 @@ async function startMockIngestion() {
 }
 
 async function waitForRuntimeEvents() {
-  const deadline = Date.now() + 45_000;
+  const deadline = Date.now() + runtimeTimeoutMs;
   while (Date.now() < deadline) {
     if (receivedEventTypes.has("frontend_exception") && receivedEventTypes.has("request_event")) {
       return;
     }
     await delay(250);
   }
-  throw new Error(`Timed out waiting for React Native runtime delivery; received ${[...receivedEventTypes].join(", ") || "no events"}`);
+  throw new Error(
+    `Timed out waiting for React Native runtime delivery; received ` +
+    `${[...receivedEventTypes].join(", ") || "no events"}; diagnostics: ` +
+    `${runtimeRequestDiagnostics.join(" | ") || "no ingestion requests"}`
+  );
 }
 
 if (args.has("--stage-android-sdk-only")) {
