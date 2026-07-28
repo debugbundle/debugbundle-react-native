@@ -431,10 +431,49 @@ allprojects {
   if (runtimeDelivery) {
     const manifestPath = resolve(appDir, "android", "app", "src", "main", "AndroidManifest.xml");
     let manifest = readFileSync(manifestPath, "utf8");
-    if (!manifest.includes("android:usesCleartextTraffic=")) {
-      manifest = manifest.replace("<application", '<application android:usesCleartextTraffic="true"');
-      writeFileSync(manifestPath, manifest);
+    if (!manifest.includes("android.permission.INTERNET")) {
+      manifest = manifest.replace(
+        /<manifest[^>]*>/,
+        (match) => `${match}\n\n    <uses-permission android:name="android.permission.INTERNET" />`
+      );
     }
+    manifest = manifest.includes("android:usesCleartextTraffic=")
+      ? manifest.replace(/android:usesCleartextTraffic="[^"]*"/, 'android:usesCleartextTraffic="true"')
+      : manifest.replace("<application", '<application android:usesCleartextTraffic="true"');
+    manifest = manifest.includes("android:networkSecurityConfig=")
+      ? manifest.replace(
+          /android:networkSecurityConfig="[^"]*"/,
+          'android:networkSecurityConfig="@xml/debugbundle_smoke_network_security_config"'
+        )
+      : manifest.replace(
+          "<application",
+          '<application android:networkSecurityConfig="@xml/debugbundle_smoke_network_security_config"'
+        );
+    writeFileSync(manifestPath, manifest);
+
+    const networkConfigPath = resolve(
+      appDir,
+      "android",
+      "app",
+      "src",
+      "main",
+      "res",
+      "xml",
+      "debugbundle_smoke_network_security_config.xml"
+    );
+    mkdirSync(dirname(networkConfigPath), { recursive: true });
+    writeFileSync(
+      networkConfigPath,
+      `<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
+`
+    );
   }
 }
 
@@ -648,11 +687,16 @@ async function runAndroidSmoke() {
   if (!existsSync(apkPath)) {
     throw new Error(`React Native runtime smoke APK was not produced at ${apkPath}`);
   }
+  assertAndroidRuntimeApkNetworkConfig(apkPath);
 
   const server = await startMockIngestion();
   try {
     run("adb", ["install", "-r", apkPath]);
     run("adb", ["reverse", `tcp:${mockPort}`, `tcp:${mockPort}`]);
+    const reverseMappings = run("adb", ["reverse", "--list"], { capture: true });
+    if (!reverseMappings.includes(`tcp:${mockPort} tcp:${mockPort}`)) {
+      throw new Error(`ADB reverse mapping was not active: ${reverseMappings.trim() || "none"}`);
+    }
     run("adb", ["shell", "am", "force-stop", "com.debugbundlesmoke"]);
     run("adb", ["logcat", "-c"], { allowFailure: true });
     try {
@@ -675,6 +719,25 @@ async function runAndroidSmoke() {
     }
   } finally {
     await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
+function assertAndroidRuntimeApkNetworkConfig(apkPath) {
+  const configuredAnalyzer = process.env.ANDROID_HOME
+    ? resolve(process.env.ANDROID_HOME, "cmdline-tools", "latest", "bin", "apkanalyzer")
+    : null;
+  const analyzer = configuredAnalyzer && existsSync(configuredAnalyzer)
+    ? configuredAnalyzer
+    : "apkanalyzer";
+  const manifest = run(analyzer, ["manifest", "print", apkPath], { capture: true });
+  const requiredFragments = [
+    "android.permission.INTERNET",
+    'android:usesCleartextTraffic="true"',
+    "debugbundle_smoke_network_security_config"
+  ];
+  const missing = requiredFragments.filter((fragment) => !manifest.includes(fragment));
+  if (missing.length > 0) {
+    throw new Error(`Android runtime APK manifest is missing: ${missing.join(", ")}`);
   }
 }
 

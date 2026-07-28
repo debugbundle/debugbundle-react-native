@@ -1,0 +1,37 @@
+name: Android Runtime Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  android-runtime-smoke:
+    name: Android JS-to-native-to-ingestion runtime smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: debugbundle/debugbundle-android
+          path: debugbundle-android
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          script: make rn-runtime-android
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          DEBUGBUNDLE_ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android
