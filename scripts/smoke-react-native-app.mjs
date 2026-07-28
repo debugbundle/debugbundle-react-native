@@ -635,12 +635,12 @@ async function runAndroidSmoke() {
     run("adb", ["install", "-r", apkPath]);
     run("adb", ["shell", "am", "force-stop", "com.debugbundlesmoke"]);
     run("adb", ["logcat", "-c"], { allowFailure: true });
-    const launchResult = run(
-      "adb",
-      ["shell", "am", "start", "-W", "-n", "com.debugbundlesmoke/.MainActivity"],
-      { capture: true }
-    ).trim();
     try {
+      const launchResult = run(
+        "adb",
+        ["shell", "am", "start", "-n", "com.debugbundlesmoke/.MainActivity"],
+        { capture: true }
+      ).trim();
       await delay(5_000);
       const initialProcessState = androidAppProcessState();
       if (!initialProcessState) {
