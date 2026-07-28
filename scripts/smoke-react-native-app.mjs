@@ -635,28 +635,61 @@ async function runAndroidSmoke() {
     run("adb", ["install", "-r", apkPath]);
     run("adb", ["shell", "am", "force-stop", "com.debugbundlesmoke"]);
     run("adb", ["logcat", "-c"], { allowFailure: true });
-    run("adb", ["shell", "am", "start", "-n", "com.debugbundlesmoke/.MainActivity"]);
+    const launchResult = run(
+      "adb",
+      ["shell", "am", "start", "-W", "-n", "com.debugbundlesmoke/.MainActivity"],
+      { capture: true }
+    ).trim();
     try {
+      await delay(5_000);
+      const initialProcessState = androidAppProcessState();
+      if (!initialProcessState) {
+        throw new Error(`Android app exited during startup; launch result: ${launchResult}`);
+      }
       await waitForRuntimeEvents();
     } catch (error) {
-      const processState = run("adb", ["shell", "pidof", "com.debugbundlesmoke"], {
-        allowFailure: true,
-        capture: true
-      }).trim();
-      const logcat = run("adb", ["logcat", "-d", "-t", "500"], {
-        allowFailure: true,
-        capture: true
-      });
-      const logTail = logcat.split(/\r?\n/).slice(-500).join("\n");
       throw new Error(
         `${error instanceof Error ? error.message : String(error)}\n` +
-        `Android app pid: ${processState || "not running"}\n` +
-        `Android logcat tail:\n${logTail || "unavailable"}`
+        collectAndroidRuntimeDiagnostics()
       );
     }
   } finally {
     await new Promise((resolveClose) => server.close(resolveClose));
   }
+}
+
+function androidAppProcessState() {
+  return run("adb", ["shell", "pidof", "com.debugbundlesmoke"], {
+    allowFailure: true,
+    capture: true
+  }).trim();
+}
+
+function collectAndroidRuntimeDiagnostics() {
+  const crashLog = run("adb", ["logcat", "-b", "crash", "-d"], {
+    allowFailure: true,
+    capture: true
+  }).trim();
+  const logcat = run("adb", ["logcat", "-d"], {
+    allowFailure: true,
+    capture: true
+  });
+  const relevantLogcat = logcat
+    .split(/\r?\n/)
+    .filter((line) => /com\.debugbundlesmoke|AndroidRuntime|ReactNative|SoLoader|Hermes|FATAL EXCEPTION|Process:|UnsatisfiedLinkError/i.test(line))
+    .slice(-1000)
+    .join("\n");
+  const exitInfo = run(
+    "adb",
+    ["shell", "dumpsys", "activity", "exit-info", "com.debugbundlesmoke"],
+    { allowFailure: true, capture: true }
+  ).trim();
+  return [
+    `Android app pid: ${androidAppProcessState() || "not running"}`,
+    `Android crash buffer:\n${crashLog || "empty"}`,
+    `Android relevant logcat:\n${relevantLogcat || "unavailable"}`,
+    `Android historical exit info:\n${exitInfo || "unavailable"}`
+  ].join("\n");
 }
 
 async function startMockIngestion() {
