@@ -9,3 +9,7 @@ RUN apt-get update \
     python3 \
     unzip \
   && rm -rf /var/lib/apt/lists/*
+
+COPY run-android-build.sh /usr/local/bin/run-android-build
+
+RUN chmod +x /usr/local/bin/run-android-build

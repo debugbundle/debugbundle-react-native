@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { installNodeReactNativeStub } from "./node-react-native-stub.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(new URL("..", import.meta.url).pathname);
@@ -12,9 +13,16 @@ const packageSpec = `${packageJson.name}@${packageJson.version}`;
 const smokeRoot = await mkdtemp(join(tmpdir(), "debugbundle-rn-registry-smoke-"));
 
 try {
+  const reactNativeStub = await installNodeReactNativeStub(smokeRoot);
   await writeFile(
     join(smokeRoot, "package.json"),
-    JSON.stringify({ type: "module", private: true }, null, 2)
+    JSON.stringify({
+      type: "module",
+      private: true,
+      dependencies: {
+        "react-native": reactNativeStub
+      }
+    }, null, 2)
   );
   await execFileAsync(
     "npm",
@@ -46,7 +54,7 @@ try {
       if (nativeModule.events[0].sdk_version !== "${packageJson.version}") {
         throw new Error("expected published SDK version ${packageJson.version}");
       }
-      if (nativeModule.events[0].payload.context.password !== "[Redacted]") {
+      if (nativeModule.events[0].context.password !== "[Redacted]") {
         throw new Error("expected redacted context before native enqueue");
       }
 

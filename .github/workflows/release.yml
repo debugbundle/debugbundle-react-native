@@ -7,7 +7,40 @@ on:
   workflow_dispatch:
 
 jobs:
+  verification:
+    uses: ./.github/workflows/ci.yml
+
+  android-native-release:
+    name: Published Android native dependency
+    needs: verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: make rn-smoke-android-published
+
+  ios-native-release:
+    name: Published Swift native dependency
+    needs: verification
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: make rn-smoke-ios-published
+
   publish:
+    needs: [verification, android-native-release, ios-native-release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -17,7 +50,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
-        run: npm install --ignore-scripts --legacy-peer-deps
+        run: npm ci --ignore-scripts --legacy-peer-deps
 
       - name: Validate tag matches package version
         if: startsWith(github.ref, 'refs/tags/')

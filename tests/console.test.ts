@@ -28,4 +28,21 @@ describe("console capture", () => {
     expect(hostError).toHaveBeenCalledWith("boom");
     restore();
   });
+
+  it("is idempotent and prevents recursive console capture", () => {
+    const hostWarn = vi.fn();
+    console.warn = hostWarn;
+    const captureLog = vi.fn(() => {
+      console.warn("nested");
+    });
+
+    const restore = captureDebugBundleConsole({ captureLog } as unknown as DebugBundleClient);
+    expect(captureDebugBundleConsole({ captureLog } as unknown as DebugBundleClient)).toBe(restore);
+    console.warn("outer");
+
+    expect(captureLog).toHaveBeenCalledOnce();
+    expect(hostWarn).toHaveBeenCalledWith("nested");
+    expect(hostWarn).toHaveBeenCalledWith("outer");
+    restore();
+  });
 });

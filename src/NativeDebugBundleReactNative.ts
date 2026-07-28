@@ -4,10 +4,14 @@ import { TurboModuleRegistry } from "react-native";
 
 export interface Spec extends TurboModule {
   initialize(config: UnsafeObject): Promise<UnsafeObject>;
+  enqueueCanonicalEvent?(event: UnsafeObject): Promise<boolean>;
   enqueueEvent(event: UnsafeObject): Promise<void>;
+  captureProbe?(label: string, data: UnsafeObject, occurredAt: string): Promise<boolean>;
+  isProbeActive?(label: string): boolean;
   flush(): Promise<void>;
   getStatus(): Promise<UnsafeObject>;
-  setContext(key: string, value: unknown): Promise<void>;
+  setContext(key: string, value: UnsafeObject): Promise<void>;
+  setContextValue?(key: string, entry: UnsafeObject): Promise<void>;
   activateProbeTriggerToken?(token: string): Promise<boolean>;
 }
 

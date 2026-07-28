@@ -1,5 +1,6 @@
 plugins {
   id "com.android.library"
+  id "jacoco"
 }
 
 def isReactNativeHostBuild = rootProject.name != "debugbundle-react-native"
@@ -10,6 +11,7 @@ if (isReactNativeHostBuild) {
 def hostKotlinVersion = rootProject.ext.has("kotlinVersion")
   ? rootProject.ext.get("kotlinVersion")
   : "2.1.20"
+def debugBundleAndroidVersion = rootProject.findProperty("debugBundleAndroidVersion") ?: "1.2.0"
 
 android {
   namespace "com.debugbundle.reactnative"
@@ -23,15 +25,82 @@ android {
     sourceCompatibility JavaVersion.VERSION_17
     targetCompatibility JavaVersion.VERSION_17
   }
+
+  testOptions {
+    unitTests.returnDefaultValues = true
+  }
 }
 
 dependencies {
   compileOnly "com.facebook.react:react-android:${rootProject.findProperty("reactNativeVersion") ?: "0.85.3"}"
   implementation "org.jetbrains.kotlin:kotlin-stdlib:${hostKotlinVersion}"
-  implementation platform("com.debugbundle:debugbundle-android-bom:1.1.0")
+  implementation platform("com.debugbundle:debugbundle-android-bom:${debugBundleAndroidVersion}")
   implementation("com.debugbundle:debugbundle-android") {
     exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
     exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"
     exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"
+  }
+  testImplementation "com.facebook.react:react-android:${rootProject.findProperty("reactNativeVersion") ?: "0.85.3"}"
+  testImplementation "junit:junit:4.13.2"
+  testImplementation "org.mockito:mockito-core:5.14.2"
+}
+
+jacoco {
+  toolVersion = "0.8.13"
+}
+
+tasks.register("androidWrapperCoverage", JacocoReport) {
+  dependsOn "testDebugUnitTest"
+  executionData.from(fileTree(layout.buildDirectory) {
+    include "jacoco/testDebugUnitTest.exec"
+    include "outputs/unit_test_code_coverage/**/*.exec"
+  })
+  sourceDirectories.from(files("src/main/java"))
+  classDirectories.from(fileTree(layout.buildDirectory.dir("intermediates/javac/debug/compileDebugJavaWithJavac/classes")) {
+    exclude "**/BuildConfig.*"
+    exclude "**/R.class"
+    exclude '**/R$*.class'
+  })
+  reports {
+    xml.required = true
+    html.required = true
+    csv.required = false
+  }
+}
+
+tasks.register("verifyAndroidWrapperCoverage") {
+  dependsOn "androidWrapperCoverage"
+  doLast {
+    def report = file("${layout.buildDirectory.get()}/reports/jacoco/androidWrapperCoverage/androidWrapperCoverage.xml")
+    if (!report.isFile()) {
+      throw new GradleException("Android wrapper coverage report is missing: ${report}")
+    }
+    def sourceCoverage = [:]
+    def sourcePattern = ~/(?s)<sourcefile name="([^"]+)">.*?<counter type="LINE" missed="(\d+)" covered="(\d+)"\/><counter type="COMPLEXITY"/
+    (report.text =~ sourcePattern).each { match ->
+      sourceCoverage[match[1]] = [
+        missed: match[2].toInteger(),
+        covered: match[3].toInteger()
+      ]
+    }
+    fileTree("src/main/java") {
+      include "**/*.java"
+    }.files.sort().each { sourceFile ->
+      def coverage = sourceCoverage[sourceFile.name]
+      if (coverage == null) {
+        throw new GradleException("Android wrapper coverage did not include ${sourceFile.name}")
+      }
+      def ratio = coverage.covered / (coverage.covered + coverage.missed)
+      if (ratio < 0.80) {
+        throw new GradleException(
+          String.format(
+            "%s line coverage %.2f%% is below the required 80.00%%",
+            sourceFile.name,
+            ratio * 100
+          )
+        )
+      }
+      println String.format("%s line coverage: %.2f%%", sourceFile.name, ratio * 100)
+    }
   }
 }

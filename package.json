@@ -1,6 +1,6 @@
 {
   "name": "@debugbundle/sdk-react-native",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "React Native SDK for DebugBundle mobile event capture.",
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -47,6 +47,7 @@
     "dist",
     "app.plugin.js",
     "DebugBundleReactNative.podspec",
+    "CHANGELOG.md",
     "README.md"
   ],
   "exports": {
@@ -82,7 +83,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "pack:check": "npm pack --dry-run",
     "smoke:registry": "node scripts/smoke-registry.mjs"
   },
@@ -102,6 +103,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.1.2",
+    "@vitest/coverage-v8": "^4.1.2",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"
   }

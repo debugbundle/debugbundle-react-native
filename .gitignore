@@ -1,6 +1,8 @@
 dist/
 node_modules/
 coverage/
+.build/
+.native-coverage/
 .smoke/
 .gradle-cache/
 .gradle-cache-rn-smoke/

@@ -9,8 +9,15 @@ const androidModule = readFileSync(
 );
 const androidBuildGradle = readFileSync(new URL("../android/build.gradle", import.meta.url), "utf8");
 const iosModule = readFileSync(new URL("../ios/DebugBundleReactNative.swift", import.meta.url), "utf8");
+const iosBridge = readFileSync(new URL("../ios/DebugBundleReactNativeBridge.mm", import.meta.url), "utf8");
+const podspec = readFileSync(new URL("../DebugBundleReactNative.podspec", import.meta.url), "utf8");
+const expoPlugin = readFileSync(new URL("../app.plugin.js", import.meta.url), "utf8");
 const ci = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
 const release = readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
+const cleanAppSmoke = readFileSync(
+  new URL("../scripts/smoke-react-native-app.mjs", import.meta.url),
+  "utf8"
+);
 
 describe("repository package and release gates", () => {
   it("declares the publishable React Native package shape", () => {
@@ -29,12 +36,20 @@ describe("repository package and release gates", () => {
     expect(packageJson.exports).toHaveProperty("./console");
   });
 
+  it("keeps the wrapper and required native dependency release lines aligned", () => {
+    expect(packageJson.version).toBe("1.2.0");
+    expect(podspec).toContain('s.version      = "1.2.0"');
+    expect(podspec).toContain('s.dependency "DebugBundle", "~> 1.2"');
+    expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "1.2.0"');
+    expect(expoPlugin).toContain('"@debugbundle/sdk-react-native", "1.2.0"');
+  });
+
   it("declares broad installed-base React Native support without allowing unknown majors", () => {
     expect(packageJson.peerDependencies.react).toBe(">=18.2 <20");
     expect(packageJson.peerDependencies["react-native"]).toBe(">=0.76 <1.0");
     expect(packageJson.peerDependencies["@react-navigation/native"]).toBe(">=6");
     expect(readme).toContain("React Native 0.76+");
-    expect(readme).toContain("Current stable React Native 0.85.x");
+    expect(readme).toContain("Current stable React Native 0.86.x");
     expect(readme).toContain("Android bridge compile on RN 0.76.9, 0.82.1, and 0.85.3");
   });
 
@@ -68,9 +83,14 @@ describe("repository package and release gates", () => {
     expect(iosModule).toContain("import DebugBundle");
     expect(iosModule).toContain("DebugBundleHTTPTransport");
     expect(iosModule).toContain("DebugBundleRequestInfo");
+    expect(iosBridge).toContain("NativeDebugBundleReactNativeSpecJSI");
+    expect(iosBridge).toContain("getTurboModule");
+    expect(iosBridge).toContain("resolve:(RCTPromiseResolveBlock)resolve");
+    expect(iosBridge).not.toContain("resolver:(RCTPromiseResolveBlock)resolve");
   });
 
   it("runs the mandatory standalone SDK verification gates in CI", () => {
+    expect(ci).toContain("workflow_call:");
     expect(ci).toContain("make verify");
     expect(ci).toContain("Android bridge compile (RN ${{ matrix.rn-version }})");
     expect(ci).toContain('rn-version: ["0.76.9", "0.82.1", "0.85.3"]');
@@ -78,11 +98,19 @@ describe("repository package and release gates", () => {
     expect(ci).toContain("iOS bridge static check");
     expect(ci).toContain("make rn-smoke-android");
     expect(ci).toContain("make rn-smoke-ios");
+    expect(ci).toMatch(/expo-ios-development-build:[\s\S]*?runs-on: macos-26/);
+    expect(cleanAppSmoke).toContain('"blank-typescript@sdk-57"');
     expect(ci).not.toContain("secrets.");
   });
 
   it("publishes the npm package only through an explicit release workflow", () => {
     expect(release).toContain("tags:");
+    expect(release).toContain("uses: ./.github/workflows/ci.yml");
+    expect(release).toContain("Published Android native dependency");
+    expect(release).toContain("make rn-smoke-android-published");
+    expect(release).toContain("Published Swift native dependency");
+    expect(release).toContain("make rn-smoke-ios-published");
+    expect(release).toContain("needs: [verification, android-native-release, ios-native-release]");
     expect(release).toContain("Validate tag matches package version");
     expect(release).toContain("make verify");
     expect(release).toContain("npm run build");

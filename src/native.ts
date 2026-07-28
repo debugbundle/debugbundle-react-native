@@ -1,3 +1,4 @@
+import { NativeModules, TurboModuleRegistry } from "react-native";
 import type { NativeDebugBundleModule, NativeDebugBundleState } from "./types.js";
 
 let overrideModule: NativeDebugBundleModule | null | undefined;
@@ -48,32 +49,9 @@ export function resetNativeModuleCacheForTesting(): void {
 }
 
 function resolveReactNativeModule(): NativeDebugBundleModule | null {
-  const required = requireReactNative();
-  const turboModule = required?.TurboModuleRegistry?.get?.("DebugBundleReactNative") as NativeDebugBundleModule | null | undefined;
+  const turboModule = TurboModuleRegistry.get<NativeDebugBundleModule>("DebugBundleReactNative");
   if (turboModule) {
     return turboModule;
   }
-  return (required?.NativeModules?.DebugBundleReactNative as NativeDebugBundleModule | undefined) ?? null;
-}
-
-function requireReactNative():
-  | {
-      NativeModules?: Record<string, unknown>;
-      TurboModuleRegistry?: { get?: (name: string) => unknown };
-    }
-  | null {
-  try {
-    const maybeRequire = Function("return typeof require === 'function' ? require : null")() as
-      | ((specifier: string) => unknown)
-      | null;
-    if (!maybeRequire) {
-      return null;
-    }
-    return maybeRequire("react-native") as {
-      NativeModules?: Record<string, unknown>;
-      TurboModuleRegistry?: { get?: (name: string) => unknown };
-    };
-  } catch {
-    return null;
-  }
+  return (NativeModules.DebugBundleReactNative as NativeDebugBundleModule | undefined) ?? null;
 }

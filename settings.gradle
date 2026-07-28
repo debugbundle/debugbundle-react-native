@@ -9,6 +9,12 @@ pluginManagement {
 dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
+    def debugBundleAndroidRepository = providers.gradleProperty("debugBundleAndroidRepository").orNull
+    if (debugBundleAndroidRepository != null && !debugBundleAndroidRepository.trim().isEmpty()) {
+      maven {
+        url = uri(debugBundleAndroidRepository)
+      }
+    }
     google()
     mavenCentral()
   }

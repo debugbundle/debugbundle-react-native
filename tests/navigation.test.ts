@@ -15,4 +15,18 @@ describe("navigation helpers", () => {
     expect(client.recordScreen).toHaveBeenCalledWith("Checkout_Home", null, "react-navigation");
     expect(client.recordScreen).toHaveBeenCalledWith("Payment/Card", "Checkout_Home", "react-navigation");
   });
+
+  it("ignores missing and repeated routes", () => {
+    const client = { recordScreen: vi.fn() };
+    const ref = createDebugBundleNavigationRef();
+
+    onDebugBundleNavigationReady(ref, client as never);
+    onDebugBundleNavigationStateChange(ref, client as never);
+    expect(client.recordScreen).not.toHaveBeenCalled();
+
+    ref.getCurrentRoute = () => ({ name: "Orders" });
+    onDebugBundleNavigationReady(ref, client as never);
+    onDebugBundleNavigationStateChange(ref, client as never);
+    expect(client.recordScreen).toHaveBeenCalledOnce();
+  });
 });

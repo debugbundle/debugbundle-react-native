@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { installNodeReactNativeStub } from "./node-react-native-stub.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(new URL("..", import.meta.url).pathname);
@@ -14,9 +15,16 @@ try {
   const [{ filename }] = JSON.parse(stdout);
   const tarball = join(root, filename);
 
+  const reactNativeStub = await installNodeReactNativeStub(smokeRoot);
   await writeFile(
     join(smokeRoot, "package.json"),
-    JSON.stringify({ type: "module", private: true }, null, 2)
+    JSON.stringify({
+      type: "module",
+      private: true,
+      dependencies: {
+        "react-native": reactNativeStub
+      }
+    }, null, 2)
   );
   await execFileAsync("npm", ["install", "--ignore-scripts", "--legacy-peer-deps", tarball], {
     cwd: smokeRoot,
@@ -41,7 +49,7 @@ try {
       if (nativeModule.events.length !== 1) {
         throw new Error("expected explicit exception event");
       }
-      if (nativeModule.events[0].payload.context.password !== "[Redacted]") {
+      if (nativeModule.events[0].context.password !== "[Redacted]") {
         throw new Error("expected redacted context before native enqueue");
       }
 

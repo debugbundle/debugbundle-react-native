@@ -3,6 +3,7 @@ import { captureDebugBundleConsole } from "./console.js";
 import { installDebugBundleErrorHandlers } from "./errors.js";
 import type {
   DebugBundleCaptureContext,
+  DebugBundleBeforeSend,
   DebugBundleClient,
   DebugBundleConfig,
   DebugBundleLogLevel,
@@ -72,6 +73,7 @@ export { captureDebugBundleConsole };
 export { installDebugBundleErrorHandlers };
 export type {
   DebugBundleCaptureContext,
+  DebugBundleBeforeSend,
   DebugBundleClient,
   DebugBundleConfig,
   DebugBundleLogLevel,

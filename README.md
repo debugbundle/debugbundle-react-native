@@ -16,6 +16,8 @@ Published implementation:
 - `fetch` and `XMLHttpRequest` instrumentation with target-scoped `X-DebugBundle-Trace-Id`.
 - JS-side bounded serialization and redaction before native queue persistence.
 - Android and iOS native wrappers that delegate queueing, config/status, request capture, crash/error capture, flushing, and probe trigger activation to the native SDK foundations.
+- Repository-local Android Java, Swift, and Objective-C++ wrapper tests with an
+  enforced 80% line-coverage floor for every handwritten native bridge source.
 - Clean-install React Native app smoke coverage for Android and iOS, including New Architecture codegen/autolinking.
 
 ## Runtime Support
@@ -23,9 +25,9 @@ Published implementation:
 | Lane | Support |
 | --- | --- |
 | Minimum compatibility | React Native 0.76+, React 18.2+, iOS 15+, Android minSdk 23 |
-| Recommended production | Current stable React Native 0.85.x with Hermes and the New Architecture enabled where your app supports it |
+| Recommended production | Current stable React Native 0.86.x with Hermes and the New Architecture enabled where your app supports it |
 | Installed-base compatibility | React Native 0.76 through current stable, including legacy bridge apps |
-| Rolling CI | TypeScript/package smoke, Android bridge compile on RN 0.76.9, 0.82.1, and 0.85.3, plus current-stable Android and iOS clean-app smokes |
+| Rolling CI | TypeScript/package smoke, Android bridge compile on RN 0.76.9, 0.82.1, and 0.85.3, bare iOS compatibility/current-installed-base lanes, plus Expo SDK 57 / RN 0.86 Android and iOS development builds |
 | Expo | Expo development builds and prebuild; Expo Go is degraded because it cannot load custom native modules |
 
 JSC compatibility is best-effort where the selected React Native lane still supports it. Hermes is the primary tested JavaScript engine.
@@ -129,6 +131,14 @@ export function AppNavigation() {
 
 Expo development builds and prebuild are supported through the config plugin. Expo Go cannot load the native module, so the SDK reports degraded status and does not claim durable native queueing, native crash evidence, native device context, or remote-probe parity.
 
+## Verification
+
+Run `make verify` for the TypeScript, package, and JavaScript coverage gates.
+Run `make android-test` for the Android bridge unit/coverage gate and
+`make ios-test` on macOS for the Swift and Objective-C++ bridge gates.
+`make verify-native` combines the JavaScript and available platform-native
+checks.
+
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v1.1.0`, and push the tag after the native Swift `DebugBundle` pod version referenced by `DebugBundleReactNative.podspec` is available to CocoaPods consumers.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v1.2.0`, and push the tag only after the exact Android and Swift native dependency line referenced by this package is available to Maven Central and CocoaPods consumers. The release workflow compiles clean apps against those published artifacts before npm publication.

@@ -9,6 +9,7 @@ import {
 describe("native module resolution", () => {
   afterEach(() => {
     delete (globalThis as { __DebugBundleReactNativeModule?: unknown }).__DebugBundleReactNativeModule;
+    delete (globalThis as { __DebugBundleReactNativeRegistryModule?: unknown }).__DebugBundleReactNativeRegistryModule;
     resetDebugBundleNativeModule();
   });
 
@@ -21,6 +22,14 @@ describe("native module resolution", () => {
   it("uses the React Native global test hook before degrading", () => {
     const module = createRecordingNativeModule();
     (globalThis as { __DebugBundleReactNativeModule?: unknown }).__DebugBundleReactNativeModule = module;
+    resetDebugBundleNativeModule();
+
+    expect(getNativeModule()).toBe(module);
+  });
+
+  it("resolves the statically imported React Native TurboModule registry", () => {
+    const module = createRecordingNativeModule();
+    (globalThis as { __DebugBundleReactNativeRegistryModule?: unknown }).__DebugBundleReactNativeRegistryModule = module;
     resetDebugBundleNativeModule();
 
     expect(getNativeModule()).toBe(module);

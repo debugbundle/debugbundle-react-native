@@ -4,18 +4,43 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 jobs:
   js:
-    name: TypeScript, tests, package smoke
+    name: Node ${{ matrix.node }} TypeScript, tests, package smoke
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["24", "26"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: make verify
+
+  package-managers:
+    name: ${{ matrix.package-manager }} clean-install smoke
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package-manager: [npm, pnpm, yarn]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: "26"
-      - run: npm install --ignore-scripts --legacy-peer-deps
-      - run: make verify
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: npm run build
+      - if: matrix.package-manager == 'pnpm'
+        run: npm install --global pnpm@11.3.0
+      - if: matrix.package-manager == 'yarn'
+        run: npm install --global yarn@1.22.22
+      - run: make smoke-package-manager PM=${{ matrix.package-manager }}
 
   android-static:
     name: Android bridge compile (RN ${{ matrix.rn-version }})
@@ -26,6 +51,10 @@ jobs:
         rn-version: ["0.76.9", "0.82.1", "0.85.3"]
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: debugbundle/debugbundle-android
+          path: debugbundle-android
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -34,21 +63,137 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.4.1"
-      - run: gradle --no-daemon -PreactNativeVersion=${{ matrix.rn-version }} :debugbundle-react-native:compileDebugJavaWithJavac
+      - name: Stage coordinated Android SDK
+        run: |
+          mkdir -p .smoke/android-maven
+          ./debugbundle-android/gradlew \
+            -p debugbundle-android \
+            --no-daemon \
+            -PVERSION_NAME=1.2.0-SNAPSHOT \
+            -PdebugbundlePublishRepo="${{ github.workspace }}/.smoke/android-maven" \
+            publishAllPublicationsToSmokeRepository
+      - run: >
+          gradle --no-daemon
+          -PreactNativeVersion=${{ matrix.rn-version }}
+          -PdebugBundleAndroidVersion=1.2.0-SNAPSHOT
+          -PdebugBundleAndroidRepository=${{ github.workspace }}/.smoke/android-maven
+          :debugbundle-react-native:compileDebugJavaWithJavac
+
+  android-wrapper-tests:
+    name: Android native-wrapper tests and coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: debugbundle/debugbundle-android
+          path: debugbundle-android
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: make android-test
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_USER_HOME: ${{ github.workspace }}/.android-home
+          ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android
+          GRADLEW: ${{ github.workspace }}/debugbundle-android/gradlew
+          GRADLE_RUNNER: wrapper
 
   android-clean-smoke:
     name: Android clean React Native app smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: debugbundle/debugbundle-android
+          path: debugbundle-android
       - uses: actions/setup-node@v6
         with:
           node-version: "26"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
       - uses: android-actions/setup-android@v3
-      - run: npm install --ignore-scripts --legacy-peer-deps
+      - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make rn-smoke-android
         env:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          DEBUGBUNDLE_ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android
+
+  android-runtime-smoke:
+    name: Android JS-to-native-to-ingestion runtime smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: debugbundle/debugbundle-android
+          path: debugbundle-android
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          script: make rn-runtime-android
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          DEBUGBUNDLE_ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android
+
+  expo-development-build:
+    name: Expo Android development build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: debugbundle/debugbundle-android
+          path: debugbundle-android
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: make rn-smoke-expo-android
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          DEBUGBUNDLE_ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android
+
+  expo-ios-development-build:
+    name: Expo iOS development build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: debugbundle/debugbundle-swift
+          path: debugbundle-swift
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: make rn-smoke-expo-ios
+        env:
+          SWIFT_SDK_ROOT: ${{ github.workspace }}/debugbundle-swift
 
   ios-static:
     name: iOS bridge static check
@@ -59,8 +204,40 @@ jobs:
       - run: grep -R "import DebugBundle" ios
       - run: grep -R "DebugBundleHTTPTransport" ios
 
+  ios-wrapper-tests:
+    name: iOS native-wrapper tests and coverage
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - run: make ios-test
+
   ios-clean-smoke:
-    name: iOS clean React Native app smoke
+    name: iOS clean React Native ${{ matrix.rn-version }} app smoke
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        rn-version: ["0.76.9", "0.85.3"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: debugbundle/debugbundle-swift
+          path: debugbundle-swift
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: make rn-smoke-ios
+        env:
+          SWIFT_SDK_ROOT: ${{ github.workspace }}/debugbundle-swift
+          RN_SMOKE_VERSION: ${{ matrix.rn-version }}
+
+  ios-runtime-smoke:
+    name: iOS JS-to-native-to-ingestion runtime smoke
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
@@ -71,7 +248,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "26"
-      - run: npm install --ignore-scripts --legacy-peer-deps
-      - run: make rn-smoke-ios
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - run: make rn-runtime-ios
         env:
           SWIFT_SDK_ROOT: ${{ github.workspace }}/debugbundle-swift

@@ -2,6 +2,10 @@ export type DebugBundleStatus = "healthy" | "degraded" | "disconnected";
 
 export type DebugBundleLogLevel = "debug" | "info" | "warning" | "error" | "critical";
 
+export type DebugBundleBeforeSend = (
+  event: DebugBundleEventEnvelope
+) => DebugBundleEventEnvelope | null;
+
 export interface DebugBundleConfig {
   projectToken?: string;
   enabled?: boolean;
@@ -37,6 +41,7 @@ export interface DebugBundleConfig {
   redactFields?: string[];
   headerAllowlist?: string[];
   sdkVersion?: string;
+  beforeSend?: DebugBundleBeforeSend;
 }
 
 export interface ResolvedDebugBundleConfig {
@@ -74,6 +79,7 @@ export interface ResolvedDebugBundleConfig {
   redactFields: string[];
   headerAllowlist: string[];
   sdkVersion: string;
+  beforeSend: DebugBundleBeforeSend | null;
 }
 
 export interface DebugBundleNetworkFilter {
@@ -106,7 +112,7 @@ export interface DebugBundleProbeOptions {
 }
 
 export interface DebugBundleEventEnvelope {
-  schema_version: "1";
+  schema_version: "2026-03-01";
   event_id: string;
   event_type:
     | "frontend_exception"
@@ -124,14 +130,14 @@ export interface DebugBundleEventEnvelope {
     framework: "react-native";
   };
   occurred_at: string;
-  correlation: {
+  correlation?: {
     trace_id: string | null;
     request_id?: string | null;
     session_id?: string | null;
     user_id_hash?: string | null;
-  } | null;
+  };
+  context?: Record<string, unknown>;
   payload: Record<string, unknown>;
-  device: Record<string, unknown> | null;
 }
 
 export interface DebugBundleClient {
@@ -156,13 +162,24 @@ export interface DebugBundleClient {
 }
 
 export interface NativeDebugBundleModule {
-  initialize(config: ResolvedDebugBundleConfig): Promise<NativeDebugBundleState> | NativeDebugBundleState;
+  initialize(config: NativeDebugBundleConfig): Promise<NativeDebugBundleState> | NativeDebugBundleState;
+  enqueueCanonicalEvent?(event: DebugBundleEventEnvelope): Promise<boolean | void> | boolean | void;
+  /** Compatibility fallback implemented by native binaries released before the canonical bridge. */
   enqueueEvent(event: DebugBundleEventEnvelope): Promise<void> | void;
+  captureProbe?(
+    label: string,
+    data: unknown,
+    occurredAt: string
+  ): Promise<boolean> | boolean;
+  isProbeActive?(label: string): boolean;
   flush(): Promise<void> | void;
   getStatus(): Promise<NativeDebugBundleState> | NativeDebugBundleState;
   setContext?(key: string, value: unknown): Promise<void> | void;
+  setContextValue?(key: string, entry: { value: unknown }): Promise<void> | void;
   activateProbeTriggerToken?(token: string): Promise<boolean> | boolean;
 }
+
+export type NativeDebugBundleConfig = Omit<ResolvedDebugBundleConfig, "beforeSend">;
 
 export interface NativeDebugBundleState {
   status: DebugBundleStatus;
