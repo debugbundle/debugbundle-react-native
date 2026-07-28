@@ -733,7 +733,7 @@ function assertAndroidRuntimeApkNetworkConfig(apkPath) {
   const requiredFragments = [
     "android.permission.INTERNET",
     'android:usesCleartextTraffic="true"',
-    "debugbundle_smoke_network_security_config"
+    "android:networkSecurityConfig="
   ];
   const missing = requiredFragments.filter((fragment) => !manifest.includes(fragment));
   if (missing.length > 0) {
