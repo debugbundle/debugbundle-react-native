@@ -4,10 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 1.2.0 - 2026-07-28
+## 1.2.0 - 2026-07-29
 
 - Preserve React Native SDK identity, original JavaScript error fields, service, correlation, context, probes, and mobile metadata through additive Android and Swift external-event APIs.
 - Compose JavaScript request observations with native capture policy, remote probes, trigger tokens, queue/transport/redaction settings, headers, sampling, and probe configuration.
+- Normalize integer-valued JavaScript numbers recursively at the Android bridge so native request capture policy and integer envelope fields retain their canonical types.
 - Added the universal `beforeSend` hook, a committed npm lockfile, frozen installs, npm/pnpm/Yarn clean-package smokes, Android/iOS runtime delivery lanes, and Expo development-build verification.
 - Coordinate native Android artifacts explicitly during clean Android and Expo builds so source validation never resolves an unrelated published native version.
 - Resolve native modules through Metro-visible React Native imports, provide the generated iOS TurboModule implementation for New Architecture apps, preserve scalar context through an object-safe additive bridge, and retain merged app context on canonical request envelopes.
