@@ -1,5 +1,6 @@
 package com.debugbundle.reactnative;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 public final class DebugBundleReactNativeModuleTest {
   private ReactApplicationContext reactContext;
@@ -243,6 +245,33 @@ public final class DebugBundleReactNativeModuleTest {
         "2026-07-28T12:00:00.000Z",
         failedProbePromise);
     verify(failedProbePromise).resolve(false);
+  }
+
+  @Test
+  public void canonicalEventsNormalizeIntegralReactNativeNumbersRecursively() {
+    ReadableMap event = readableMap(Map.of(
+        "event_type", "request_event",
+        "payload", Map.of(
+            "response_status", 503.0,
+            "duration_ms", 12.5,
+            "probe_data", Map.of(
+                "version", 1.0,
+                "values", List.of(2.0, 2.5)))));
+    Promise promise = mock(Promise.class);
+    when(nativeOperations.captureExternalEvent(any(Map.class))).thenReturn(true);
+
+    module.enqueueCanonicalEvent(event, promise);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+    verify(nativeOperations).captureExternalEvent(captor.capture());
+    Map<String, Object> payload = (Map<String, Object>) captor.getValue().get("payload");
+    Map<String, Object> probeData = (Map<String, Object>) payload.get("probe_data");
+    assertEquals(503L, payload.get("response_status"));
+    assertEquals(12.5, payload.get("duration_ms"));
+    assertEquals(1L, probeData.get("version"));
+    assertEquals(List.of(2L, 2.5), probeData.get("values"));
+    verify(promise).resolve(true);
   }
 
   @Test

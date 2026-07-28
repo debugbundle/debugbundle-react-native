@@ -15,8 +15,10 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -112,7 +114,8 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
   @ReactMethod
   public void enqueueCanonicalEvent(ReadableMap event, Promise promise) {
     try {
-      promise.resolve(nativeOperations.captureExternalEvent(event.toHashMap()));
+      promise.resolve(
+          nativeOperations.captureExternalEvent(normalizeBridgeMap(event.toHashMap())));
     } catch (Throwable ignored) {
       promise.resolve(false);
     }
@@ -337,6 +340,46 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
 
   private static Long longValue(Object value) {
     return value instanceof Number ? ((Number) value).longValue() : null;
+  }
+
+  private static Map<String, Object> normalizeBridgeMap(Map<String, Object> values) {
+    Map<String, Object> normalized = new LinkedHashMap<>();
+    for (Map.Entry<String, Object> entry : values.entrySet()) {
+      normalized.put(entry.getKey(), normalizeBridgeValue(entry.getValue()));
+    }
+    return normalized;
+  }
+
+  private static Object normalizeBridgeValue(Object value) {
+    if (value instanceof Double) {
+      double number = (Double) value;
+      if (Double.isFinite(number)
+          && number == Math.rint(number)
+          && number >= Long.MIN_VALUE
+          && number <= Long.MAX_VALUE) {
+        return (long) number;
+      }
+      return number;
+    }
+    if (value instanceof Map<?, ?>) {
+      Map<String, Object> normalized = new LinkedHashMap<>();
+      for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+        if (entry.getKey() instanceof String) {
+          normalized.put(
+              (String) entry.getKey(),
+              normalizeBridgeValue(entry.getValue()));
+        }
+      }
+      return normalized;
+    }
+    if (value instanceof List<?>) {
+      List<Object> normalized = new ArrayList<>();
+      for (Object item : (List<?>) value) {
+        normalized.add(normalizeBridgeValue(item));
+      }
+      return normalized;
+    }
+    return value;
   }
 
   private static Object dynamicValue(Dynamic value) {
