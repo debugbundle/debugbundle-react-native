@@ -242,13 +242,16 @@ function patchAppEntrypoint() {
   if (!smokeGlobal.__debugbundleRuntimeSmoke) {
     smokeGlobal.__debugbundleRuntimeSmoke = true;
     DebugBundle.setContext('release_stage', 'smoke');
-    setTimeout(() => {
+    setTimeout(async () => {
+      console.log('[DebugBundleSmoke] capture_start status=' + DebugBundle.status);
       DebugBundle.captureException(new Error('rn runtime smoke'), {trace_id: 'rn-runtime-trace'});
       DebugBundle.captureRequest(
         {method: 'GET', url: 'https://example.test/failure'},
         {statusCode: 503, durationMillis: 12},
         {trace_id: 'rn-runtime-trace'}
       );
+      await DebugBundle.flush();
+      console.log('[DebugBundleSmoke] flush_complete status=' + DebugBundle.status);
     }, 750);
   }`
     : "DebugBundle.init({projectToken: 'rn-smoke-token', service: 'rn-smoke', enabled: false});";
@@ -694,6 +697,7 @@ function collectAndroidRuntimeDiagnostics() {
 
 async function startMockIngestion() {
   const server = createServer(async (request, response) => {
+    runtimeRequestDiagnostics.push(`${request.method ?? "UNKNOWN"}:${request.url ?? "unknown"}`);
     if (request.method === "GET" && request.url?.startsWith("/v1/sdk/config")) {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({
