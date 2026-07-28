@@ -226,9 +226,7 @@ function patchAppEntrypoint() {
   }
 
   const original = readFileSync(appPath, "utf8");
-  const runtimeEndpoint = platforms.includes("android")
-    ? `http://10.0.2.2:${mockPort}/v1/events`
-    : `http://127.0.0.1:${mockPort}/v1/events`;
+  const runtimeEndpoint = `http://127.0.0.1:${mockPort}/v1/events`;
   const initialization = runtimeDelivery
     ? `DebugBundle.init({
     projectToken: 'rn-smoke-token',
@@ -636,6 +634,7 @@ async function runAndroidSmoke() {
   const server = await startMockIngestion();
   try {
     run("adb", ["install", "-r", apkPath]);
+    run("adb", ["reverse", `tcp:${mockPort}`, `tcp:${mockPort}`]);
     run("adb", ["shell", "am", "force-stop", "com.debugbundlesmoke"]);
     run("adb", ["logcat", "-c"], { allowFailure: true });
     try {
