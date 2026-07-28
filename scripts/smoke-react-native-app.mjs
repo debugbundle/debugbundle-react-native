@@ -241,6 +241,12 @@ function patchAppEntrypoint() {
     smokeGlobal.__debugbundleRuntimeSmoke = true;
     DebugBundle.setContext('release_stage', 'smoke');
     setTimeout(async () => {
+      try {
+        const networkCheck = await fetch('http://127.0.0.1:${mockPort}/runtime-check');
+        console.log('[DebugBundleSmoke] network_check status=' + networkCheck.status);
+      } catch (error) {
+        console.log('[DebugBundleSmoke] network_check error=' + String(error));
+      }
       console.log('[DebugBundleSmoke] capture_start status=' + DebugBundle.status);
       DebugBundle.captureException(new Error('rn runtime smoke'), {trace_id: 'rn-runtime-trace'});
       DebugBundle.captureRequest(
@@ -248,8 +254,17 @@ function patchAppEntrypoint() {
         {statusCode: 503, durationMillis: 12},
         {trace_id: 'rn-runtime-trace'}
       );
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const nativeDebugBundle = TurboModuleRegistry.get<any>('DebugBundleReactNative')
+        ?? NativeModules.DebugBundleReactNative;
+      const preFlushState = await nativeDebugBundle?.getStatus?.();
+      console.log('[DebugBundleSmoke] pre_flush_native=' + JSON.stringify(preFlushState));
       await DebugBundle.flush();
-      console.log('[DebugBundleSmoke] flush_complete status=' + DebugBundle.status);
+      const postFlushState = await nativeDebugBundle?.getStatus?.();
+      console.log(
+        '[DebugBundleSmoke] flush_complete status=' + DebugBundle.status
+        + ' native=' + JSON.stringify(postFlushState)
+      );
     }, 750);
   }`
     : "DebugBundle.init({projectToken: 'rn-smoke-token', service: 'rn-smoke', enabled: false});";
@@ -260,6 +275,9 @@ function patchAppEntrypoint() {
       "import {",
       "import {DebugBundle} from '@debugbundle/sdk-react-native';\nimport {"
     );
+  }
+  if (runtimeDelivery && !patched.includes("TurboModuleRegistry")) {
+    patched = `import {NativeModules, TurboModuleRegistry} from 'react-native';\n${patched}`;
   }
   const initializationMarker = runtimeDelivery ? "rn runtime smoke" : "service: 'rn-smoke'";
   if (!patched.includes(initializationMarker)) {
@@ -697,6 +715,11 @@ function collectAndroidRuntimeDiagnostics() {
 async function startMockIngestion() {
   const server = createServer(async (request, response) => {
     runtimeRequestDiagnostics.push(`${request.method ?? "UNKNOWN"}:${request.url ?? "unknown"}`);
+    if (request.method === "GET" && request.url === "/runtime-check") {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
     if (request.method === "GET" && request.url?.startsWith("/v1/sdk/config")) {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({
@@ -755,7 +778,7 @@ async function startMockIngestion() {
   });
   await new Promise((resolveListen, rejectListen) => {
     server.once("error", rejectListen);
-    server.listen(mockPort, "0.0.0.0", resolveListen);
+    server.listen(mockPort, resolveListen);
   });
   return server;
 }
