@@ -19,11 +19,13 @@ import com.debugbundle.android.DebugBundleConfig;
 import com.debugbundle.android.DebugBundleLogLevel;
 import com.debugbundle.android.DebugBundleRequestInfo;
 import com.debugbundle.android.DebugBundleResponseInfo;
+import com.facebook.react.bridge.Dynamic;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.NativeModule;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.ReadableType;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.uimanager.ViewManager;
 import java.util.HashMap;
@@ -246,8 +248,10 @@ public final class DebugBundleReactNativeModuleTest {
   @Test
   public void contextTriggerAndFlushOperationsAlwaysResolve() throws Exception {
     Promise contextPromise = mock(Promise.class);
-    module.setContext("tenant", "checkout", contextPromise);
+    Dynamic tenant = dynamic(ReadableType.String, "checkout");
+    module.setContext("tenant", tenant, contextPromise);
     verify(nativeOperations).setContext("tenant", "checkout");
+    verify(tenant).recycle();
     verify(contextPromise).resolve(isNull());
 
     Promise contextValuePromise = mock(Promise.class);
@@ -272,7 +276,9 @@ public final class DebugBundleReactNativeModuleTest {
         .when(nativeOperations)
         .setContext(eq("broken"), any());
     Promise failedContext = mock(Promise.class);
-    module.setContext("broken", "value", failedContext);
+    Dynamic failedValue = dynamic(ReadableType.String, "value");
+    module.setContext("broken", failedValue, failedContext);
+    verify(failedValue).recycle();
     verify(failedContext).resolve(isNull());
 
     doThrow(new ReflectiveOperationException("flush failure"))
@@ -288,6 +294,22 @@ public final class DebugBundleReactNativeModuleTest {
     Promise failedTrigger = mock(Promise.class);
     module.activateProbeTriggerToken("broken", failedTrigger);
     verify(failedTrigger).resolve(false);
+  }
+
+  @Test
+  public void legacyDynamicContextPreservesEverySupportedValueShape() {
+    assertDynamicContext("null", dynamic(ReadableType.Null, null), null);
+    assertDynamicContext("boolean", dynamic(ReadableType.Boolean, true), true);
+    assertDynamicContext("number", dynamic(ReadableType.Number, 2.5), 2.5);
+    assertDynamicContext("string", dynamic(ReadableType.String, "checkout"), "checkout");
+    assertDynamicContext(
+        "map",
+        dynamic(ReadableType.Map, readableMap(Map.of("count", 2))),
+        Map.of("count", 2));
+    assertDynamicContext(
+        "array",
+        dynamic(ReadableType.Array, readableArray(List.of("cart", 2))),
+        List.of("cart", 2));
   }
 
   @Test
@@ -316,6 +338,20 @@ public final class DebugBundleReactNativeModuleTest {
     assertTrue(viewManagers.isEmpty());
   }
 
+  @Test
+  public void newArchitectureInteropCanParseEveryExportedMethod() throws Exception {
+    Class<?> interop = Class.forName(
+        "com.facebook.react.internal.turbomodule.core.TurboModuleInteropUtils");
+    java.lang.reflect.Method parser = interop.getDeclaredMethod(
+        "getMethodDescriptorsFromModule",
+        NativeModule.class);
+    parser.setAccessible(true);
+
+    List<?> descriptors = (List<?>) parser.invoke(null, module);
+
+    assertFalse(descriptors.isEmpty());
+  }
+
   private void assertLegacyEventCalls(
       Map<String, Object> event,
       Runnable verification) {
@@ -323,6 +359,47 @@ public final class DebugBundleReactNativeModuleTest {
     module.enqueueEvent(readableMap(event), promise);
     verification.run();
     verify(promise).resolve(isNull());
+  }
+
+  private void assertDynamicContext(String key, Dynamic value, Object expected) {
+    Promise promise = mock(Promise.class);
+    module.setContext(key, value, promise);
+    verify(nativeOperations).setContext(key, expected);
+    verify(value).recycle();
+    verify(promise).resolve(isNull());
+  }
+
+  private static Dynamic dynamic(ReadableType type, Object value) {
+    Dynamic dynamic = mock(Dynamic.class);
+    when(dynamic.getType()).thenReturn(type);
+    when(dynamic.isNull()).thenReturn(type == ReadableType.Null);
+    switch (type) {
+      case Boolean:
+        when(dynamic.asBoolean()).thenReturn((Boolean) value);
+        break;
+      case Number:
+        when(dynamic.asDouble()).thenReturn((Double) value);
+        break;
+      case String:
+        when(dynamic.asString()).thenReturn((String) value);
+        break;
+      case Map:
+        when(dynamic.asMap()).thenReturn((ReadableMap) value);
+        break;
+      case Array:
+        when(dynamic.asArray()).thenReturn((ReadableArray) value);
+        break;
+      default:
+        break;
+    }
+    return dynamic;
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private static ReadableArray readableArray(List<?> values) {
+    ReadableArray array = mock(ReadableArray.class);
+    when(array.toArrayList()).thenReturn((java.util.ArrayList) new java.util.ArrayList<>((List) values));
+    return array;
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})

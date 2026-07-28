@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
   package metadata, accept both generated iOS header layouts, and give
   unaccelerated Android runtime smokes enough time and diagnostics to
   distinguish slow startup from bridge or ingestion failures.
+- Preserve the legacy arbitrary-value Android `setContext` bridge through
+  React Native's New Architecture-compatible `Dynamic` type so module parsing
+  cannot crash the host process before initialization.
 
 ## 1.1.0
 

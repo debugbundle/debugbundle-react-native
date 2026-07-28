@@ -7,6 +7,7 @@ import com.debugbundle.android.DebugBundleLogLevel;
 import com.debugbundle.android.DebugBundleRequestInfo;
 import com.debugbundle.android.DebugBundleResponseInfo;
 import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.Dynamic;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -161,12 +162,18 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
   }
 
   @ReactMethod
-  public void setContext(String key, Object value, Promise promise) {
+  public void setContext(String key, Dynamic value, Promise promise) {
     try {
-      nativeOperations.setContext(key, value);
+      nativeOperations.setContext(key, dynamicValue(value));
       promise.resolve(null);
     } catch (Throwable ignored) {
       promise.resolve(null);
+    } finally {
+      try {
+        value.recycle();
+      } catch (Throwable ignored) {
+        // React Native bridge cleanup must not escape into the host process.
+      }
     }
   }
 
@@ -330,6 +337,26 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
 
   private static Long longValue(Object value) {
     return value instanceof Number ? ((Number) value).longValue() : null;
+  }
+
+  private static Object dynamicValue(Dynamic value) {
+    if (value == null || value.isNull()) {
+      return null;
+    }
+    switch (value.getType()) {
+      case Boolean:
+        return value.asBoolean();
+      case Number:
+        return value.asDouble();
+      case String:
+        return value.asString();
+      case Map:
+        return value.asMap().toHashMap();
+      case Array:
+        return value.asArray().toArrayList();
+      default:
+        return null;
+    }
   }
 
   private static DebugBundleLogLevel logLevel(String value) {
