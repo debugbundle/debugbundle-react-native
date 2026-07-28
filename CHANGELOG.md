@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
 - Add repository-local Android Java, Swift, and Objective-C++ wrapper tests and
   enforce at least 80% line coverage for every handwritten native bridge
   source in Make and CI.
+- Preserve React Native 0.76 New Architecture codegen discovery by exporting
+  package metadata, accept both generated iOS header layouts, and give
+  unaccelerated Android runtime smokes enough time and diagnostics to
+  distinguish slow startup from bridge or ingestion failures.
 
 ## 1.1.0
 
