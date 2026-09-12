@@ -120,7 +120,7 @@ describe("repository package and release gates", () => {
     expect(release.split("\n  publish:\n")[1]).toContain("id-token: write");
     expect(release.split("\n  publish:\n")[0]).not.toContain("id-token: write");
     expect(release).toContain("npm install --global npm@11.5.2");
-    expect(release).toContain("npm publish --access public");
+    expect(release).toContain("node scripts/publish-package.mjs");
     expect(release).toContain("Verify npm registry visibility");
     expect(release).toContain("npm view \"@debugbundle/sdk-react-native@${PACKAGE_VERSION}\"");
     expect(release).toContain("Smoke published package");
