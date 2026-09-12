@@ -141,4 +141,4 @@ checks.
 
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure the repository secret `NPM_TOKEN`, make sure the tag matches `package.json` exactly, for example `v1.3.0`, and push the tag only after the exact Android and Swift native dependency line referenced by this package is available to Maven Central and CocoaPods consumers. The release workflow compiles clean apps against those published artifacts before npm publication.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly, for example `v1.3.0`, and push the tag only after the exact Android and Swift native dependency line referenced by this package is available to Maven Central and CocoaPods consumers. The release workflow compiles clean apps against those published artifacts before npm publication.
