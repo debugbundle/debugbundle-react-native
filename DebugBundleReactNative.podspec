@@ -1,8 +1,8 @@
 Pod::Spec.new do |s|
   s.name         = "DebugBundleReactNative"
-  s.version      = "1.2.0"
+  s.version      = "1.3.0"
   s.summary      = "React Native wrapper for the DebugBundle mobile SDKs."
-  s.license      = { :type => "AGPL-3.0-only" }
+  s.license      = { :type => "Apache-2.0", :file => "LICENSE" }
   s.author       = { "DebugBundle" => "support@debugbundle.com" }
   s.homepage     = "https://github.com/debugbundle/debugbundle-react-native"
   s.source       = { :git => "https://github.com/debugbundle/debugbundle-react-native.git", :tag => s.version.to_s }
@@ -12,5 +12,5 @@ Pod::Spec.new do |s|
 
   s.dependency "React-Core"
   install_modules_dependencies(s) if defined?(install_modules_dependencies)
-  s.dependency "DebugBundle", "~> 1.2"
+  s.dependency "DebugBundle", "~> 1.3"
 end

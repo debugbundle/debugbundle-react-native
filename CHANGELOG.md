@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-09-12
+
+### Changed
+
+- License first-party SDK code under Apache-2.0 and ship consistent package licensing metadata and license text.
+- Use the Apache-2.0 Android and Swift SDK releases.
+
 ## Unreleased
 
 ## 1.2.0 - 2026-07-29

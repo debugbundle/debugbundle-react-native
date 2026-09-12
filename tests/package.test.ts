@@ -37,11 +37,11 @@ describe("repository package and release gates", () => {
   });
 
   it("keeps the wrapper and required native dependency release lines aligned", () => {
-    expect(packageJson.version).toBe("1.2.0");
-    expect(podspec).toContain('s.version      = "1.2.0"');
-    expect(podspec).toContain('s.dependency "DebugBundle", "~> 1.2"');
-    expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "1.2.0"');
-    expect(expoPlugin).toContain('"@debugbundle/sdk-react-native", "1.2.0"');
+    expect(packageJson.version).toBe("1.3.0");
+    expect(podspec).toContain('s.version      = "1.3.0"');
+    expect(podspec).toContain('s.dependency "DebugBundle", "~> 1.3"');
+    expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "1.3.0"');
+    expect(expoPlugin).toContain('"@debugbundle/sdk-react-native", "1.3.0"');
   });
 
   it("declares broad installed-base React Native support without allowing unknown majors", () => {

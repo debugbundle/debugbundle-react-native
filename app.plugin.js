@@ -49,4 +49,4 @@ function withAndroidDesugaring(contents) {
   return next;
 }
 
-export default createRunOncePlugin(withDebugBundle, "@debugbundle/sdk-react-native", "1.2.0");
+export default createRunOncePlugin(withDebugBundle, "@debugbundle/sdk-react-native", "1.3.0");
