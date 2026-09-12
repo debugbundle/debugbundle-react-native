@@ -5,7 +5,7 @@ ANDROID_HOME ?= $(ANDROID_SDK_ROOT)
 ANDROID_USER_HOME ?= $(CURDIR)/../debugbundle-android/.android-home
 ANDROID_SDK_SOURCE ?= $(CURDIR)/../debugbundle-android
 ANDROID_COORDINATED_VERSION ?= $(shell sed -n 's/^VERSION_NAME=//p' "$(ANDROID_SDK_SOURCE)/gradle.properties")
-ANDROID_NATIVE_RELEASE_VERSION ?= 1.3.0
+ANDROID_NATIVE_RELEASE_VERSION ?= 1.3.1
 GRADLE_USER_HOME ?= $(CURDIR)/.gradle-cache
 GRADLEW ?= $(CURDIR)/../debugbundle-android/gradlew
 GRADLE_RUNNER ?= docker
@@ -106,6 +106,10 @@ rn-smoke:
 	node scripts/smoke-react-native-app.mjs
 
 verify: typecheck test smoke
+
+.PHONY: verify-docker
+verify-docker:
+	docker run --rm -v "$(CURDIR):/workspace" --tmpfs /workspace/node_modules:exec -w /workspace node:26-alpine sh -lc 'apk add --no-cache bash make >/dev/null && npm ci --ignore-scripts --legacy-peer-deps && make verify'
 
 verify-native: verify $(NATIVE_PLATFORM_TARGETS)
 

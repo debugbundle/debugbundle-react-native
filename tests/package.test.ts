@@ -40,7 +40,7 @@ describe("repository package and release gates", () => {
     expect(packageJson.version).toBe("1.3.0");
     expect(podspec).toContain('s.version      = "1.3.0"');
     expect(podspec).toContain('s.dependency "DebugBundle", "~> 1.3"');
-    expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "1.3.0"');
+    expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "1.3.1"');
     expect(expoPlugin).toContain('"@debugbundle/sdk-react-native", "1.3.0"');
   });
 
@@ -115,7 +115,11 @@ describe("repository package and release gates", () => {
     expect(release).toContain("make verify");
     expect(release).toContain("npm run build");
     expect(release).toContain("npm pack --dry-run");
-    expect(release).toContain("secrets.NPM_TOKEN");
+    expect(release).not.toContain("secrets.NPM_TOKEN");
+    expect(release).not.toContain("NODE_AUTH_TOKEN");
+    expect(release.split("\n  publish:\n")[1]).toContain("id-token: write");
+    expect(release.split("\n  publish:\n")[0]).not.toContain("id-token: write");
+    expect(release).toContain("npm install --global npm@11.5.2");
     expect(release).toContain("npm publish --access public");
     expect(release).toContain("Verify npm registry visibility");
     expect(release).toContain("npm view \"@debugbundle/sdk-react-native@${PACKAGE_VERSION}\"");

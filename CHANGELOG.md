@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - License first-party SDK code under Apache-2.0 and ship consistent package licensing metadata and license text.
-- Use the Apache-2.0 Android and Swift SDK releases.
+- Use Android1.3.1 with complete packaged Apache licenses and the Apache-2.0 Swift SDK1.3.0.
+- Publish npm releases through GitHub Actions trusted publishing without an npm token.
 
 ## Unreleased
 
