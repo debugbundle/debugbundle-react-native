@@ -129,6 +129,10 @@ describe("repository package and release gates", () => {
     expect(androidRuntime).not.toContain("android-actions/setup-android");
     expect(ci).toMatch(/expo-ios-development-build:[\s\S]*?runs-on: macos-26/);
     expect(cleanAppSmoke).toContain('"blank-typescript@sdk-57"');
+    expect(cleanAppSmoke).toContain("UIApplicationSceneManifest");
+    expect(cleanAppSmoke).toContain("class SceneDelegate: UIResponder, UIWindowSceneDelegate");
+    expect(cleanAppSmoke).toContain("configuration.delegateClass = SceneDelegate.self");
+    expect(cleanAppSmoke).toContain("UIWindow(windowScene: windowScene)");
     expect(ci).not.toContain("secrets.");
   });
 
