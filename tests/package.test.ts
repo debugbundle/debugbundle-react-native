@@ -152,15 +152,17 @@ describe("repository package and release gates", () => {
     expect(release).toContain("make check-protected-native-pins");
     expect(release).toContain("make rn-smoke-android-published");
     expect(release).toContain("Update Android SDK command-line tools");
-    expect(release).toContain("Grant Android SDK write access for emulator provisioning");
-    expect(release).toContain('sudo chown -R "$(id -u):$(id -g)" "$sdk"');
+    expect(release).toContain("Restore Android runtime write access after container smoke");
+    expect(release).toContain(
+      'sudo chown -R "$(id -u):$(id -g)" "$sdk" "$GITHUB_WORKSPACE/.smoke"'
+    );
     const androidRelease = release
       .split("\n  android-native-release:\n")[1]
       .split("\n  ios-native-release:\n")[0];
     expect(androidRelease.indexOf("make rn-smoke-android-published")).toBeLessThan(
-      androidRelease.indexOf("Grant Android SDK write access for emulator provisioning")
+      androidRelease.indexOf("Restore Android runtime write access after container smoke")
     );
-    expect(androidRelease.indexOf("Grant Android SDK write access for emulator provisioning")).toBeLessThan(
+    expect(androidRelease.indexOf("Restore Android runtime write access after container smoke")).toBeLessThan(
       androidRelease.indexOf("reactivecircus/android-emulator-runner@v2")
     );
     expect(release).not.toContain("android-actions/setup-android");
