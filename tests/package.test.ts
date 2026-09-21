@@ -127,9 +127,14 @@ describe("repository package and release gates", () => {
     expect(ci).toContain("make rn-smoke-ios");
     expect(ci).toContain('api-level: "37.0"');
     expect(ci).toContain("Update Android SDK command-line tools");
+    expect(ci).toContain("Grant Android SDK write access for emulator provisioning");
+    expect(ci).toContain('sudo chown -R "$(id -u):$(id -g)" "$sdk"');
+    expect(ci).toMatch(/android-runtime-smoke:[\s\S]*?Grant Android SDK write access for emulator provisioning[\s\S]*?reactivecircus\/android-emulator-runner@v2/);
     expect(ci).not.toContain("android-actions/setup-android");
     expect(androidRuntime).toContain('api-level: "37.0"');
     expect(androidRuntime).toContain("Update Android SDK command-line tools");
+    expect(androidRuntime).toContain("Grant Android SDK write access for emulator provisioning");
+    expect(androidRuntime).toContain('sudo chown -R "$(id -u):$(id -g)" "$sdk"');
     expect(androidRuntime).not.toContain("android-actions/setup-android");
     expect(ci).toMatch(/expo-ios-development-build:[\s\S]*?runs-on: macos-26/);
     expect(cleanAppSmoke).toContain('"blank-typescript@sdk-57"');
@@ -147,6 +152,8 @@ describe("repository package and release gates", () => {
     expect(release).toContain("make check-protected-native-pins");
     expect(release).toContain("make rn-smoke-android-published");
     expect(release).toContain("Update Android SDK command-line tools");
+    expect(release).toContain("Grant Android SDK write access for emulator provisioning");
+    expect(release).toContain('sudo chown -R "$(id -u):$(id -g)" "$sdk"');
     expect(release).not.toContain("android-actions/setup-android");
     expect(release).toContain('api-level: "37.0"');
     expect(release).toContain("target: google_apis");
