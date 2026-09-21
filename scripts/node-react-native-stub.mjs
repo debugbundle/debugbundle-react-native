@@ -14,7 +14,7 @@ export async function installNodeReactNativeStub(consumerRoot) {
     join(stubDirectory, "package.json"),
     JSON.stringify({
       name: "react-native",
-      version: "0.85.3",
+      version: "0.87.1",
       type: "module",
       main: "./index.js",
       exports: {

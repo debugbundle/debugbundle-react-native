@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rn-version: ["0.76.9", "0.82.1", "0.85.3"]
+        rn-version: ["0.76.9", "0.82.1", "0.85.3", "0.87.1"]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/checkout@v6
@@ -69,13 +69,13 @@ jobs:
           ./debugbundle-android/gradlew \
             -p debugbundle-android \
             --no-daemon \
-            -PVERSION_NAME=1.3.0-SNAPSHOT \
+            -PVERSION_NAME=2.0.0-SNAPSHOT \
             -PdebugbundlePublishRepo="${{ github.workspace }}/.smoke/android-maven" \
             publishAllPublicationsToSmokeRepository
       - run: >
           gradle --no-daemon
           -PreactNativeVersion=${{ matrix.rn-version }}
-          -PdebugBundleAndroidVersion=1.3.0-SNAPSHOT
+          -PdebugBundleAndroidVersion=2.0.0-SNAPSHOT
           -PdebugBundleAndroidRepository=${{ github.workspace }}/.smoke/android-maven
           :debugbundle-react-native:compileDebugJavaWithJavac
 
@@ -96,6 +96,15 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: android-actions/setup-android@v3
+      - name: Update Android SDK command-line tools
+        run: |
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          yes | "$sdk/cmdline-tools/latest/bin/sdkmanager" --install "cmdline-tools;latest" > /dev/null
+          if [ -d "$sdk/cmdline-tools/latest-2" ]; then
+            rm -rf "$sdk/cmdline-tools/latest"
+            mv "$sdk/cmdline-tools/latest-2" "$sdk/cmdline-tools/latest"
+          fi
+          "$sdk/cmdline-tools/latest/bin/avdmanager" list device > /dev/null
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make android-test
         env:
@@ -153,7 +162,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 36
+          api-level: "37.0"
+          target: google_apis
           arch: x86_64
           script: make rn-runtime-android
         env:
@@ -221,11 +231,15 @@ jobs:
 
   ios-clean-smoke:
     name: iOS clean React Native ${{ matrix.rn-version }} app smoke
-    runs-on: macos-15
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        rn-version: ["0.76.9", "0.85.3"]
+        include:
+          - rn-version: "0.76.9"
+            runner: macos-15
+          - rn-version: "0.87.1"
+            runner: xcode-27
     steps:
       - uses: actions/checkout@v6
       - uses: actions/checkout@v6
@@ -243,7 +257,7 @@ jobs:
 
   ios-runtime-smoke:
     name: iOS JS-to-native-to-ingestion runtime smoke
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v6
       - uses: actions/checkout@v6

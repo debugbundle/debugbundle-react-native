@@ -1,26 +1,8 @@
+import { DEFAULT_SENSITIVE_KEYS, isSensitiveKey as privacySensitiveKey } from "./privacy-keys.js";
+import { sanitizeTelemetry } from "./privacy-telemetry.js";
+
 const DEFAULT_REDACT_FIELDS = [
-  "password",
-  "secret",
-  "token",
-  "api_key",
-  "apikey",
-  "access_token",
-  "refresh_token",
-  "private_key",
-  "passwd",
-  "card_number",
-  "cvv",
-  "cvc",
-  "pin",
-  "expiry",
-  "phone",
-  "bearer",
-  "session_id",
-  "otp",
-  "verification_code",
-  "authorization",
-  "cookie",
-  "ssn"
+  ...DEFAULT_SENSITIVE_KEYS
 ];
 
 export const DEFAULT_HEADER_ALLOWLIST = [
@@ -46,8 +28,15 @@ export function defaultRedactFields(): string[] {
 }
 
 export function sanitizeValue(value: unknown, options: SanitizeOptions = {}): unknown {
-  const visited = new WeakSet<object>();
-  return sanitize(value, normalizeOptions(options), 0, visited, undefined);
+  try {
+    const normalized = normalizeOptions(options);
+    const visited = new WeakSet<object>();
+    const prepared = sanitize(value, normalized, 0, visited, undefined);
+    const protectedValue = sanitizeTelemetry(prepared, { additionalKeys: options.redactFields ?? [] });
+    return protectedValue.ok ? protectedValue.value : "[REDACTED]";
+  } catch {
+    return "[REDACTED]";
+  }
 }
 
 export function sanitizeHeaders(
@@ -71,7 +60,7 @@ export function sanitizeHeaders(
 
 function normalizeOptions(options: SanitizeOptions): Required<SanitizeOptions> {
   return {
-    redactFields: options.redactFields ?? DEFAULT_REDACT_FIELDS,
+    redactFields: [...DEFAULT_REDACT_FIELDS, ...(options.redactFields ?? [])],
     maxDepth: options.maxDepth ?? 8,
     maxStringLength: options.maxStringLength ?? 2048,
     maxArrayLength: options.maxArrayLength ?? 50,
@@ -87,13 +76,13 @@ function sanitize(
   key: string | undefined
 ): unknown {
   if (key && isSensitiveKey(key, options.redactFields)) {
-    return "[Redacted]";
+    return "[REDACTED]";
   }
   if (value === null || value === undefined) {
     return value ?? null;
   }
   if (typeof value === "string") {
-    return truncate(value, options.maxStringLength);
+    return truncate(value, options.maxStringLength, options.redactFields);
   }
   if (typeof value === "number" || typeof value === "boolean") {
     return value;
@@ -136,30 +125,21 @@ function sanitizeError(
   visited: WeakSet<object>
 ): Record<string, unknown> {
   return {
-    name: truncate(error.name || "Error", options.maxStringLength),
-    message: truncate(error.message || "", options.maxStringLength),
-    stack: typeof error.stack === "string" ? truncate(error.stack, options.maxStringLength * 4) : null,
+    name: truncate(error.name || "Error", options.maxStringLength, options.redactFields),
+    message: truncate(error.message || "", options.maxStringLength, options.redactFields),
+    stack: typeof error.stack === "string" ? truncate(error.stack, options.maxStringLength * 4, options.redactFields) : null,
     cause: "cause" in error ? sanitize(error.cause, options, depth + 1, visited, "cause") : null
   };
 }
 
-function truncate(value: string, maxLength: number): string {
-  if (value.length <= maxLength) {
-    return value;
-  }
-  return `${value.slice(0, maxLength)}...[Truncated]`;
+function truncate(value: string, maxLength: number, fields: string[]): string {
+  if (value.length > 16 * 1024) return "[REDACTED]";
+  const safe = sanitizeTelemetry(value, { additionalKeys: fields });
+  if (!safe.ok || typeof safe.value !== "string") return "[REDACTED]";
+  if (safe.value.length <= maxLength) return safe.value;
+  return `${safe.value.slice(0, maxLength)}...[Truncated]`;
 }
 
 function isSensitiveKey(key: string, sensitiveFields: string[]): boolean {
-  const segments = splitKey(key);
-  const sensitive = new Set(sensitiveFields.flatMap(splitKey));
-  return segments.some((segment) => sensitive.has(segment));
-}
-
-function splitKey(key: string): string[] {
-  return key
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .split(/[^a-zA-Z0-9]+/)
-    .map((segment) => segment.toLowerCase())
-    .filter(Boolean);
+  return privacySensitiveKey(key, [...DEFAULT_SENSITIVE_KEYS, ...sensitiveFields]);
 }

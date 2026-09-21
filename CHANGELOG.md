@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+## [2.0.0] - 2026-09-21
+
+### Security
+
+- Enforce mandatory JavaScript capture protection before and after `beforeSend` and before native bridge calls, including the legacy bridge fallback.
+
+### Changed
+
+- Pin the protected Android 2.0.0 and Swift 2.0 release lines and fail the release when any wrapper, bridge, podspec, Android, or smoke-test version drifts.
+- Require published-native Android 17/API 37.0 and Xcode 27/iOS 27 app-delivery gates before npm publication.
+
 ## [1.3.0] - 2026-09-12
 
 ### Changed
@@ -9,8 +22,6 @@ All notable changes to this project will be documented in this file.
 - License first-party SDK code under Apache-2.0 and ship consistent package licensing metadata and license text.
 - Use Android1.3.1 with complete packaged Apache licenses and the Apache-2.0 Swift SDK1.3.0.
 - Publish npm releases through GitHub Actions trusted publishing without an npm token.
-
-## Unreleased
 
 ## 1.2.0 - 2026-07-29
 

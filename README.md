@@ -25,9 +25,9 @@ Published implementation:
 | Lane | Support |
 | --- | --- |
 | Minimum compatibility | React Native 0.76+, React 18.2+, iOS 15+, Android minSdk 23 |
-| Recommended production | Current stable React Native 0.86.x with Hermes and the New Architecture enabled where your app supports it |
+| Recommended production | Current stable React Native 0.87.x with Hermes and the New Architecture enabled where your app supports it |
 | Installed-base compatibility | React Native 0.76 through current stable, including legacy bridge apps |
-| Rolling CI | TypeScript/package smoke, Android bridge compile on RN 0.76.9, 0.82.1, and 0.85.3, bare iOS compatibility/current-installed-base lanes, plus Expo SDK 57 / RN 0.86 Android and iOS development builds |
+| Rolling CI | TypeScript/package smoke, Android bridge compile on RN 0.76.9, 0.82.1, 0.85.3, and 0.87.1, bare iOS compatibility/current-installed-base lanes, plus Expo SDK 57 / RN 0.86 Android and iOS development builds |
 | Expo | Expo development builds and prebuild; Expo Go is degraded because it cannot load custom native modules |
 
 JSC compatibility is best-effort where the selected React Native lane still supports it. Hermes is the primary tested JavaScript engine.
@@ -141,4 +141,4 @@ checks.
 
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly, for example `v1.3.0`, and push the tag only after the exact Android and Swift native dependency line referenced by this package is available to Maven Central and CocoaPods consumers. The release workflow compiles clean apps against those published artifacts before npm publication.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The next protected release requires a matching 2.x wrapper/Swift pod line and a published Android 2.x BOM/module pin. `make check-protected-native-pins` refuses the current 1.x source line; update the wrapper version, native pins, and embedded SDK versions together only after the exact Android and Swift artifacts are available to Maven Central and CocoaPods consumers. The release workflow then compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.

@@ -83,12 +83,48 @@ describe("React Native client", () => {
     });
     expect(nativeModule.events[0]?.payload.stack).toContain("boom");
     expect(nativeModule.events[0]?.context).toMatchObject({
-      user_password: "[Redacted]",
-      nested: { accessToken: "[Redacted]" }
+      user_password: "[REDACTED]",
+      nested: { accessToken: "[REDACTED]" }
     });
     expect(nativeModule.events[0]?.payload.device).toMatchObject({
       device_type: "mobile"
     });
+  });
+
+  it("withholds hook-injected credentials in protocol metadata before either native bridge", () => {
+    for (const useLegacy of [false, true]) {
+      const nativeModule = installRecordingNativeModule();
+      if (useLegacy) nativeModule.enqueueCanonicalEvent = undefined;
+      const client = createDebugBundleClient({
+        projectToken: "dbp_test", service: "rn",
+        beforeSend: (event) => ({ ...event, sdk_version: "dbundle_proj_SYNTHETIC_SECRET" })
+      });
+      client.captureException(new Error("boom"));
+      expect(nativeModule.events).toEqual([]);
+    }
+  });
+
+  it("scrubs hook-injected content before both native bridge variants", () => {
+    for (const useLegacy of [false, true]) {
+      const nativeModule = installRecordingNativeModule();
+      if (useLegacy) nativeModule.enqueueCanonicalEvent = undefined;
+      const client = createDebugBundleClient({
+        projectToken: "dbp_test", service: "rn",
+        beforeSend: (event) => {
+          event.payload.message = "Authorization: Bearer abcdef123456";
+          event.context = { refreshToken: "canary-private-value", operation: "checkout" };
+          return event;
+        }
+      });
+
+      client.captureException(new Error("boom"));
+
+      const outbound = JSON.stringify(nativeModule.events);
+      expect(outbound).not.toContain("canary-private-value");
+      expect(outbound).not.toContain("abcdef123456");
+      expect(outbound).toContain("checkout");
+      expect(nativeModule.events[0]?.payload.message).toBe("Authorization: [REDACTED]");
+    }
   });
 
   it("keeps heavy probe callbacks dormant without remote activation support", () => {
@@ -158,8 +194,8 @@ describe("React Native client", () => {
     expect(request?.correlation).toEqual({ trace_id: "trace-rn" });
     expect(request?.context).toEqual({
       release_stage: "smoke",
-      trace_id: "[Redacted]",
-      password: "[Redacted]"
+      trace_id: "trace-rn",
+      password: "[REDACTED]"
     });
   });
 
@@ -225,7 +261,7 @@ describe("React Native client", () => {
 
     client.captureLog("disabled", "error", { password: "secret" });
 
-    expect(observedPassword).toBe("[Redacted]");
+    expect(observedPassword).toBe("[REDACTED]");
     expect(nativeModule.events).toHaveLength(0);
     expect(nativeModule.config).not.toHaveProperty("beforeSend");
   });

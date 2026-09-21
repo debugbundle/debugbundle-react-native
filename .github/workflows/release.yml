@@ -10,9 +10,20 @@ jobs:
   verification:
     uses: ./.github/workflows/ci.yml
 
+  protected-native-line:
+    name: Protected native release line
+    needs: verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - run: make check-protected-native-pins
+
   android-native-release:
     name: Published Android native dependency
-    needs: verification
+    needs: [verification, protected-native-line]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -24,13 +35,35 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: android-actions/setup-android@v3
+      - name: Update Android SDK command-line tools
+        run: |
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          yes | "$sdk/cmdline-tools/latest/bin/sdkmanager" --install "cmdline-tools;latest" > /dev/null
+          if [ -d "$sdk/cmdline-tools/latest-2" ]; then
+            rm -rf "$sdk/cmdline-tools/latest"
+            mv "$sdk/cmdline-tools/latest-2" "$sdk/cmdline-tools/latest"
+          fi
+          "$sdk/cmdline-tools/latest/bin/avdmanager" list device > /dev/null
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make rn-smoke-android-published
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: "37.0"
+          target: google_apis
+          arch: x86_64
+          script: make rn-runtime-android-published
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
 
   ios-native-release:
     name: Published Swift native dependency
-    needs: verification
-    runs-on: macos-26
+    needs: [verification, protected-native-line]
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -38,10 +71,11 @@ jobs:
           node-version: "26"
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make rn-smoke-ios-published
+      - run: make rn-runtime-ios-published
 
   publish:
     permissions:
-      contents: read
+      contents: write
       id-token: write
     needs: [verification, android-native-release, ios-native-release]
     runs-on: ubuntu-latest
@@ -57,6 +91,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --ignore-scripts --legacy-peer-deps
+
+      - name: Resolve package version
+        id: package_version
+        run: echo "value=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
 
       - name: Validate tag matches package version
         if: startsWith(github.ref, 'refs/tags/')
@@ -93,3 +131,10 @@ jobs:
 
       - name: Smoke published package
         run: npm run smoke:registry
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.package_version.outputs.value }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true

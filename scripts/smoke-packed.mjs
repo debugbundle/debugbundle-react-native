@@ -49,7 +49,7 @@ try {
       if (nativeModule.events.length !== 1) {
         throw new Error("expected explicit exception event");
       }
-      if (nativeModule.events[0].context.password !== "[Redacted]") {
+      if (nativeModule.events[0].context.password !== "[REDACTED]") {
         throw new Error("expected redacted context before native enqueue");
       }
 

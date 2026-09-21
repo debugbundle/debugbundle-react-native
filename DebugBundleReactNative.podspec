@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "DebugBundleReactNative"
-  s.version      = "1.3.0"
+  s.version      = "2.0.0"
   s.summary      = "React Native wrapper for the DebugBundle mobile SDKs."
   s.license      = { :type => "Apache-2.0", :file => "LICENSE" }
   s.author       = { "DebugBundle" => "support@debugbundle.com" }
@@ -12,5 +12,5 @@ Pod::Spec.new do |s|
 
   s.dependency "React-Core"
   install_modules_dependencies(s) if defined?(install_modules_dependencies)
-  s.dependency "DebugBundle", "~> 1.3"
+  s.dependency "DebugBundle", "~> 2.0"
 end

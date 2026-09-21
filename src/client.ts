@@ -1,6 +1,7 @@
 import { getNativeModule, degradedNativeState, safeNativeCall } from "./native.js";
 import { applyBeforeSend } from "./before-send.js";
 import { defaultRedactFields, DEFAULT_HEADER_ALLOWLIST, sanitizeHeaders, sanitizeValue } from "./redaction.js";
+import { sanitizeTelemetry } from "./privacy-telemetry.js";
 import type {
   DebugBundleCaptureContext,
   DebugBundleClient,
@@ -18,7 +19,7 @@ import type {
 } from "./types.js";
 
 const SDK_NAME = "@debugbundle/sdk-react-native" as const;
-const DEFAULT_SDK_VERSION = "1.3.0";
+const DEFAULT_SDK_VERSION = "2.0.0";
 const LOG_LEVELS: Record<DebugBundleLogLevel, number> = {
   debug: 10,
   info: 20,
@@ -26,6 +27,39 @@ const LOG_LEVELS: Record<DebugBundleLogLevel, number> = {
   error: 40,
   critical: 50
 };
+
+function protectEventFields(
+  event: DebugBundleEventEnvelope,
+  additionalKeys: string[]
+): DebugBundleEventEnvelope | null {
+  // Preserve typed identities only when their scalar values pass the mandatory policy.
+  for (const value of [event.schema_version, event.sdk_name, event.sdk_version,
+    ...Object.values(event.correlation ?? {})]) {
+    if (typeof value !== "string") continue;
+    const checked = sanitizeTelemetry(value, { additionalKeys });
+    if (!checked.ok || checked.value !== value) return null;
+  }
+  const result = sanitizeTelemetry({
+    service: event.service,
+    payload: event.payload,
+    ...(event.context ? { context: event.context } : {})
+  }, { additionalKeys });
+  if (!result.ok || !result.value || typeof result.value !== "object" || Array.isArray(result.value)) {
+    return null;
+  }
+  const safeFields = result.value as Record<string, unknown>;
+  if (!safeFields.service || !safeFields.payload ||
+      typeof safeFields.service !== "object" || Array.isArray(safeFields.service) ||
+      typeof safeFields.payload !== "object" || Array.isArray(safeFields.payload)) {
+    return null;
+  }
+  return {
+    ...event,
+    service: safeFields.service as DebugBundleEventEnvelope["service"],
+    payload: safeFields.payload as Record<string, unknown>,
+    ...(event.context ? { context: safeFields.context as Record<string, unknown> } : {})
+  };
+}
 
 export class DebugBundleReactNativeClient implements DebugBundleClient {
   private config: ResolvedDebugBundleConfig;
@@ -268,18 +302,22 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
         ? { ...payload, device: canonicalDevice(this.nativeState.device, this.config) }
         : payload
     };
-    const event = applyBeforeSend(authoredEvent, this.config.beforeSend);
+    const initial = protectEventFields(authoredEvent, this.config.redactFields);
+    if (!initial) return;
+    const event = applyBeforeSend(initial, this.config.beforeSend);
     if (!event || !localPolicyAllows) {
       return;
     }
+    const safeEvent = protectEventFields(event, this.config.redactFields);
+    if (!safeEvent) return;
     if (!this.nativeModule) {
       this.nativeState = degradedNativeState("native_module_unavailable");
       return;
     }
     if (this.nativeModule.enqueueCanonicalEvent) {
-      void safeNativeCall(() => this.nativeModule!.enqueueCanonicalEvent!(event), undefined);
+      void safeNativeCall(() => this.nativeModule!.enqueueCanonicalEvent!(safeEvent), undefined);
     } else {
-      void safeNativeCall(() => this.nativeModule!.enqueueEvent(toLegacyNativeEvent(event)), undefined);
+      void safeNativeCall(() => this.nativeModule!.enqueueEvent(toLegacyNativeEvent(safeEvent)), undefined);
     }
   }
 

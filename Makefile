@@ -5,7 +5,8 @@ ANDROID_HOME ?= $(ANDROID_SDK_ROOT)
 ANDROID_USER_HOME ?= $(CURDIR)/../debugbundle-android/.android-home
 ANDROID_SDK_SOURCE ?= $(CURDIR)/../debugbundle-android
 ANDROID_COORDINATED_VERSION ?= $(shell sed -n 's/^VERSION_NAME=//p' "$(ANDROID_SDK_SOURCE)/gradle.properties")
-ANDROID_NATIVE_RELEASE_VERSION ?= 1.3.1
+ANDROID_NATIVE_RELEASE_VERSION ?= 2.0.0
+REACT_NATIVE_VERSION ?= 0.87.1
 GRADLE_USER_HOME ?= $(CURDIR)/.gradle-cache
 GRADLEW ?= $(CURDIR)/../debugbundle-android/gradlew
 GRADLE_RUNNER ?= docker
@@ -40,7 +41,7 @@ ifeq ($(shell uname -s),Darwin)
 NATIVE_PLATFORM_TARGETS += ios-test
 endif
 
-.PHONY: build typecheck test pack smoke smoke-package-manager smoke-registry android-compile android-test android-compile-published ios-test rn-smoke-ios rn-smoke-android rn-smoke-expo-android rn-smoke-expo-ios rn-smoke-ios-published rn-smoke-android-published rn-runtime-ios rn-runtime-android rn-smoke verify verify-native clean
+.PHONY: build typecheck test pack smoke smoke-package-manager smoke-registry check-protected-native-pins android-compile android-test android-compile-published ios-test rn-smoke-ios rn-smoke-android rn-smoke-expo-android rn-smoke-expo-ios rn-smoke-ios-published rn-smoke-android-published rn-runtime-ios rn-runtime-android rn-runtime-ios-published rn-runtime-android-published rn-smoke verify verify-native clean
 
 build:
 	npm run build
@@ -64,16 +65,19 @@ smoke-package-manager:
 smoke-registry:
 	npm run smoke:registry
 
+check-protected-native-pins:
+	node scripts/check-protected-native-pins.mjs
+
 android-compile:
 	$(ANDROID_STAGE_ENV) DEBUGBUNDLE_ANDROID_SDK_SOURCE="$(ANDROID_SDK_SOURCE)" ANDROID_SDK_ROOT="$(ANDROID_SDK_ROOT)" ANDROID_USER_HOME="$(ANDROID_USER_HOME)" node scripts/smoke-react-native-app.mjs --stage-android-sdk-only
-	$(ANDROID_COMPILE_CMD) -PdebugBundleAndroidVersion="$(ANDROID_COORDINATED_VERSION)" -PdebugBundleAndroidRepository="$(ANDROID_STAGED_REPOSITORY)" :debugbundle-react-native:compileDebugJavaWithJavac
+	$(ANDROID_COMPILE_CMD) -PreactNativeVersion="$(REACT_NATIVE_VERSION)" -PdebugBundleAndroidVersion="$(ANDROID_COORDINATED_VERSION)" -PdebugBundleAndroidRepository="$(ANDROID_STAGED_REPOSITORY)" :debugbundle-react-native:compileDebugJavaWithJavac
 
 android-test:
 	$(ANDROID_STAGE_ENV) DEBUGBUNDLE_ANDROID_SDK_SOURCE="$(ANDROID_SDK_SOURCE)" ANDROID_SDK_ROOT="$(ANDROID_SDK_ROOT)" ANDROID_USER_HOME="$(ANDROID_USER_HOME)" node scripts/smoke-react-native-app.mjs --stage-android-sdk-only
-	$(ANDROID_COMPILE_CMD) -PdebugBundleAndroidVersion="$(ANDROID_COORDINATED_VERSION)" -PdebugBundleAndroidRepository="$(ANDROID_STAGED_REPOSITORY)" :debugbundle-react-native:verifyAndroidWrapperCoverage
+	$(ANDROID_COMPILE_CMD) -PreactNativeVersion="$(REACT_NATIVE_VERSION)" -PdebugBundleAndroidVersion="$(ANDROID_COORDINATED_VERSION)" -PdebugBundleAndroidRepository="$(ANDROID_STAGED_REPOSITORY)" :debugbundle-react-native:verifyAndroidWrapperCoverage
 
 android-compile-published:
-	$(ANDROID_COMPILE_CMD) -PdebugBundleAndroidVersion="$(ANDROID_NATIVE_RELEASE_VERSION)" :debugbundle-react-native:compileDebugJavaWithJavac
+	$(ANDROID_COMPILE_CMD) -PreactNativeVersion="$(REACT_NATIVE_VERSION)" -PdebugBundleAndroidVersion="$(ANDROID_NATIVE_RELEASE_VERSION)" :debugbundle-react-native:compileDebugJavaWithJavac
 
 ios-test:
 	scripts/verify-ios-wrapper-coverage.sh
@@ -83,6 +87,9 @@ rn-smoke-ios:
 
 rn-runtime-ios:
 	node scripts/smoke-react-native-app.mjs --ios --runtime
+
+rn-runtime-ios-published:
+	RN_SMOKE_NATIVE_SOURCE=published node scripts/smoke-react-native-app.mjs --ios --runtime
 
 rn-smoke-android:
 	node scripts/smoke-react-native-app.mjs --android
@@ -101,6 +108,9 @@ rn-smoke-android-published:
 
 rn-runtime-android:
 	node scripts/smoke-react-native-app.mjs --android --runtime
+
+rn-runtime-android-published:
+	RN_SMOKE_NATIVE_SOURCE=published DEBUGBUNDLE_ANDROID_VERSION="$(ANDROID_NATIVE_RELEASE_VERSION)" node scripts/smoke-react-native-app.mjs --android --runtime
 
 rn-smoke:
 	node scripts/smoke-react-native-app.mjs
