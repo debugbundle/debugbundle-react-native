@@ -175,6 +175,13 @@ describe("repository package and release gates", () => {
     expect(release).toContain("make rn-runtime-ios-published");
     expect(release).toContain("needs: [verification, android-native-release, ios-native-release]");
     expect(release).toContain("Validate tag matches package version");
+    expect(release).toContain(
+      `node -p '"value=" + require("./package.json").version' >> "$GITHUB_OUTPUT"`
+    );
+    expect(release).toContain(
+      `PACKAGE_VERSION="$(node -p 'require("./package.json").version')"`
+    );
+    expect(release).not.toContain(`\\"require('./package.json').version\\"`);
     expect(release).toContain("make verify");
     expect(release).toContain("npm run build");
     expect(release).toContain("npm pack --dry-run");
