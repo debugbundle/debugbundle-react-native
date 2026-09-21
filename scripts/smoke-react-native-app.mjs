@@ -60,6 +60,14 @@ function run(command, args, options = {}) {
   return result.stdout ?? "";
 }
 
+function readDiagnosticTail(path, limit = 12000) {
+  if (!existsSync(path)) {
+    return "not captured";
+  }
+  const output = readFileSync(path, "utf8").trim();
+  return output.length > limit ? output.slice(-limit) : output || "empty";
+}
+
 function packSdk() {
   if (!skipBuild) {
     run("npm", ["run", "build"]);
@@ -544,12 +552,47 @@ async function runIosSmoke() {
   }
 
   const server = await startMockIngestion();
+  const stdoutPath = resolve(smokeRoot, "ios-runtime-stdout.log");
+  const stderrPath = resolve(smokeRoot, "ios-runtime-stderr.log");
+  rmSync(stdoutPath, { force: true });
+  rmSync(stderrPath, { force: true });
   try {
     run("xcrun", ["simctl", "install", simulatorId, appPath]);
     run("xcrun", ["simctl", "terminate", simulatorId, bundleIdentifier], { allowFailure: true });
-    run("xcrun", ["simctl", "launch", simulatorId, bundleIdentifier]);
-    await waitForRuntimeEvents();
+    run("xcrun", [
+      "simctl",
+      "launch",
+      `--stdout=${stdoutPath}`,
+      `--stderr=${stderrPath}`,
+      simulatorId,
+      bundleIdentifier
+    ]);
+    try {
+      await waitForRuntimeEvents();
+    } catch (error) {
+      const simulatorLog = run("xcrun", [
+        "simctl",
+        "spawn",
+        simulatorId,
+        "log",
+        "show",
+        "--last",
+        "5m",
+        "--style",
+        "compact",
+        "--predicate",
+        `process == "${scheme}"`
+      ], { allowFailure: true, capture: true });
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `${message}\n` +
+        `iOS runtime stdout:\n${readDiagnosticTail(stdoutPath)}\n` +
+        `iOS runtime stderr:\n${readDiagnosticTail(stderrPath)}\n` +
+        `iOS simulator log:\n${simulatorLog.trim().slice(-12000) || "not captured"}`
+      );
+    }
   } finally {
+    run("xcrun", ["simctl", "terminate", simulatorId, bundleIdentifier], { allowFailure: true });
     await new Promise((resolveClose) => server.close(resolveClose));
   }
 }
