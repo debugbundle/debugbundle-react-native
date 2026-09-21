@@ -42,5 +42,4 @@ jobs:
           arch: x86_64
           script: make rn-runtime-android
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           DEBUGBUNDLE_ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android

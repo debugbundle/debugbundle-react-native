@@ -106,7 +106,6 @@ jobs:
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make android-test
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           ANDROID_USER_HOME: ${{ github.workspace }}/.android-home
           ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android
           GRADLEW: ${{ github.workspace }}/debugbundle-android/gradlew
@@ -131,7 +130,6 @@ jobs:
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make rn-smoke-android
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           DEBUGBUNDLE_ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android
 
   android-runtime-smoke:
@@ -172,7 +170,6 @@ jobs:
           arch: x86_64
           script: make rn-runtime-android
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           DEBUGBUNDLE_ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android
 
   expo-development-build:
@@ -194,7 +191,6 @@ jobs:
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make rn-smoke-expo-android
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           DEBUGBUNDLE_ANDROID_SDK_SOURCE: ${{ github.workspace }}/debugbundle-android
 
   expo-ios-development-build:
