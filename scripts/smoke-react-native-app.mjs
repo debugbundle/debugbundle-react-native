@@ -442,7 +442,7 @@ allprojects {
   if (expoDevelopmentBuild) {
     gradleProperties = gradleProperties.replace(
       /^org\.gradle\.jvmargs=.*$/m,
-      "org.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=512m"
+      "org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m"
     );
   }
   const androidArchitectures = process.env.RN_SMOKE_ANDROID_ARCHITECTURES

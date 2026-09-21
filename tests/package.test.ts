@@ -138,6 +138,8 @@ describe("repository package and release gates", () => {
     expect(androidRuntime).not.toContain("android-actions/setup-android");
     expect(ci).toMatch(/expo-ios-development-build:[\s\S]*?runs-on: macos-26/);
     expect(cleanAppSmoke).toContain('"blank-typescript@sdk-57"');
+    expect(cleanAppSmoke).toContain("org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m");
+    expect(cleanAppSmoke).not.toContain("org.gradle.jvmargs=-Xmx1024m");
     expect(iosRuntimeLifecycle).toContain("UIApplicationSceneManifest");
     expect(iosRuntimeLifecycle).toContain("class SceneDelegate: UIResponder, UIWindowSceneDelegate");
     expect(iosRuntimeLifecycle).toContain("configuration.delegateClass = SceneDelegate.self");
@@ -192,7 +194,8 @@ describe("repository package and release gates", () => {
     expect(release).toContain("npm install --global npm@11.5.2");
     expect(release).toContain("node scripts/publish-package.mjs");
     expect(release).toContain("Verify npm registry visibility");
-    expect(release).toContain("npm view \"@debugbundle/sdk-react-native@${PACKAGE_VERSION}\"");
+    expect(release).toContain("node scripts/wait-for-registry.mjs");
+    expect(release).not.toContain("for attempt in 1 2 3 4 5");
     expect(release).toContain("Smoke published package");
     expect(release).toContain("npm run smoke:registry");
     expect(release).toContain("Create GitHub release");
