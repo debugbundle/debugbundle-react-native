@@ -154,6 +154,15 @@ describe("repository package and release gates", () => {
     expect(release).toContain("Update Android SDK command-line tools");
     expect(release).toContain("Grant Android SDK write access for emulator provisioning");
     expect(release).toContain('sudo chown -R "$(id -u):$(id -g)" "$sdk"');
+    const androidRelease = release
+      .split("\n  android-native-release:\n")[1]
+      .split("\n  ios-native-release:\n")[0];
+    expect(androidRelease.indexOf("make rn-smoke-android-published")).toBeLessThan(
+      androidRelease.indexOf("Grant Android SDK write access for emulator provisioning")
+    );
+    expect(androidRelease.indexOf("Grant Android SDK write access for emulator provisioning")).toBeLessThan(
+      androidRelease.indexOf("reactivecircus/android-emulator-runner@v2")
+    );
     expect(release).not.toContain("android-actions/setup-android");
     expect(release).toContain('api-level: "37.0"');
     expect(release).toContain("target: google_apis");
