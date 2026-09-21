@@ -29,6 +29,10 @@ jobs:
             mv "$sdk/cmdline-tools/latest-2" "$sdk/cmdline-tools/latest"
           fi
           "$sdk/cmdline-tools/latest/bin/avdmanager" list device > /dev/null
+      - name: Grant Android SDK write access for emulator provisioning
+        run: |
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          sudo chown -R "$(id -u):$(id -g)" "$sdk"
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - name: Enable KVM access
         run: |
