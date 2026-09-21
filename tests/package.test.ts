@@ -23,6 +23,10 @@ const cleanAppSmoke = readFileSync(
   new URL("../scripts/smoke-react-native-app.mjs", import.meta.url),
   "utf8"
 );
+const iosRuntimeLifecycle = readFileSync(
+  new URL("../scripts/ios-runtime-lifecycle.mjs", import.meta.url),
+  "utf8"
+);
 
 describe("repository package and release gates", () => {
   it("declares the publishable React Native package shape", () => {
@@ -129,6 +133,10 @@ describe("repository package and release gates", () => {
     expect(androidRuntime).not.toContain("android-actions/setup-android");
     expect(ci).toMatch(/expo-ios-development-build:[\s\S]*?runs-on: macos-26/);
     expect(cleanAppSmoke).toContain('"blank-typescript@sdk-57"');
+    expect(iosRuntimeLifecycle).toContain("UIApplicationSceneManifest");
+    expect(iosRuntimeLifecycle).toContain("class SceneDelegate: UIResponder, UIWindowSceneDelegate");
+    expect(iosRuntimeLifecycle).toContain("configuration.delegateClass = SceneDelegate.self");
+    expect(iosRuntimeLifecycle).toContain("UIWindow(windowScene: windowScene)");
     expect(ci).not.toContain("secrets.");
   });
 

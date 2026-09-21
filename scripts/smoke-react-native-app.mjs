@@ -4,6 +4,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
+import {
+  iosSceneManifestFragment,
+  renderIosRuntimeAppDelegate
+} from "./ios-runtime-lifecycle.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
@@ -331,9 +335,31 @@ function patchIosPodfile() {
         "</dict>",
         "  <key>NSAppTransportSecurity</key>\n  <dict>\n    <key>NSAllowsLocalNetworking</key>\n    <true/>\n  </dict>\n</dict>"
       );
-      writeFileSync(infoPlistPath, infoPlist);
     }
+    if (!infoPlist.includes("UIApplicationSceneManifest")) {
+      infoPlist = infoPlist.replace(
+        "</dict>\n</plist>",
+        `${iosSceneManifestFragment}\n</dict>\n</plist>`
+      );
+    }
+    writeFileSync(infoPlistPath, infoPlist);
+    patchIosRuntimeLifecycle();
   }
+}
+
+function patchIosRuntimeLifecycle() {
+  const appDelegatePath = resolve(appDir, "ios", projectName, "AppDelegate.swift");
+  if (!existsSync(appDelegatePath)) {
+    throw new Error("Generated React Native runtime app is missing AppDelegate.swift");
+  }
+  const appDelegate = readFileSync(appDelegatePath, "utf8");
+  if (!appDelegate.includes("RCTReactNativeFactory") || !appDelegate.includes("ReactNativeDelegate")) {
+    throw new Error("Generated React Native AppDelegate no longer matches the supported template");
+  }
+  writeFileSync(
+    appDelegatePath,
+    renderIosRuntimeAppDelegate(projectName)
+  );
 }
 
 function patchAndroidGradle() {
