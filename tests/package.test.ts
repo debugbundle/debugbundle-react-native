@@ -138,6 +138,8 @@ describe("repository package and release gates", () => {
     expect(androidRuntime).not.toContain("android-actions/setup-android");
     expect(ci).toMatch(/expo-ios-development-build:[\s\S]*?runs-on: macos-26/);
     expect(cleanAppSmoke).toContain('"blank-typescript@sdk-57"');
+    expect(cleanAppSmoke).toContain("org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m");
+    expect(cleanAppSmoke).not.toContain("org.gradle.jvmargs=-Xmx1024m");
     expect(iosRuntimeLifecycle).toContain("UIApplicationSceneManifest");
     expect(iosRuntimeLifecycle).toContain("class SceneDelegate: UIResponder, UIWindowSceneDelegate");
     expect(iosRuntimeLifecycle).toContain("configuration.delegateClass = SceneDelegate.self");
