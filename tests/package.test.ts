@@ -123,8 +123,10 @@ describe("repository package and release gates", () => {
     expect(ci).toContain("make rn-smoke-ios");
     expect(ci).toContain('api-level: "37.0"');
     expect(ci).toContain("Update Android SDK command-line tools");
+    expect(ci).not.toContain("android-actions/setup-android");
     expect(androidRuntime).toContain('api-level: "37.0"');
     expect(androidRuntime).toContain("Update Android SDK command-line tools");
+    expect(androidRuntime).not.toContain("android-actions/setup-android");
     expect(ci).toMatch(/expo-ios-development-build:[\s\S]*?runs-on: macos-26/);
     expect(cleanAppSmoke).toContain('"blank-typescript@sdk-57"');
     expect(ci).not.toContain("secrets.");
@@ -137,6 +139,7 @@ describe("repository package and release gates", () => {
     expect(release).toContain("make check-protected-native-pins");
     expect(release).toContain("make rn-smoke-android-published");
     expect(release).toContain("Update Android SDK command-line tools");
+    expect(release).not.toContain("android-actions/setup-android");
     expect(release).toContain('api-level: "37.0"');
     expect(release).toContain("target: google_apis");
     expect(release).toContain("make rn-runtime-android-published");

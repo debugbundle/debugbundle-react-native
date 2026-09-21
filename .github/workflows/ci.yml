@@ -59,7 +59,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.4.1"
@@ -95,7 +94,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v3
       - name: Update Android SDK command-line tools
         run: |
           sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
@@ -130,7 +128,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v3
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make rn-smoke-android
         env:
@@ -153,7 +150,15 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v3
+      - name: Update Android SDK command-line tools
+        run: |
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          yes | "$sdk/cmdline-tools/latest/bin/sdkmanager" --install "cmdline-tools;latest" > /dev/null
+          if [ -d "$sdk/cmdline-tools/latest-2" ]; then
+            rm -rf "$sdk/cmdline-tools/latest"
+            mv "$sdk/cmdline-tools/latest-2" "$sdk/cmdline-tools/latest"
+          fi
+          "$sdk/cmdline-tools/latest/bin/avdmanager" list device > /dev/null
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - name: Enable KVM access
         run: |
@@ -186,7 +191,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v3
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make rn-smoke-expo-android
         env:
