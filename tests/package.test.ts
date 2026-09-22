@@ -23,6 +23,14 @@ const cleanAppSmoke = readFileSync(
   new URL("../scripts/smoke-react-native-app.mjs", import.meta.url),
   "utf8"
 );
+const packedPackageSmoke = readFileSync(
+  new URL("../scripts/smoke-packed.mjs", import.meta.url),
+  "utf8"
+);
+const registryPackageSmoke = readFileSync(
+  new URL("../scripts/smoke-registry.mjs", import.meta.url),
+  "utf8"
+);
 const iosRuntimeLifecycle = readFileSync(
   new URL("../scripts/ios-runtime-lifecycle.mjs", import.meta.url),
   "utf8"
@@ -97,6 +105,12 @@ describe("repository package and release gates", () => {
     expect(readme).toContain("`allowedOrigins`, `transportMode`, or `/debugbundle/browser` helpers");
     expect(readme).not.toContain("Before public npm publication");
     expect(readme).not.toContain("Until that pod is published");
+  });
+
+  it("uses the canonical redaction sentinel in both package consumer smokes", () => {
+    expect(packedPackageSmoke).toContain('context.password !== "[REDACTED]"');
+    expect(registryPackageSmoke).toContain('context.password !== "[REDACTED]"');
+    expect(registryPackageSmoke).not.toContain('context.password !== "[Redacted]"');
   });
 
   it("delegates platform bridge calls to the native SDK foundations", () => {
