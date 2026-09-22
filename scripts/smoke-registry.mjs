@@ -54,7 +54,7 @@ try {
       if (nativeModule.events[0].sdk_version !== "${packageJson.version}") {
         throw new Error("expected published SDK version ${packageJson.version}");
       }
-      if (nativeModule.events[0].context.password !== "[Redacted]") {
+      if (nativeModule.events[0].context.password !== "[REDACTED]") {
         throw new Error("expected redacted context before native enqueue");
       }
 
