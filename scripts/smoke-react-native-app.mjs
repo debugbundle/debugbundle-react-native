@@ -141,6 +141,7 @@ function stageAndroidSdk() {
       "--no-daemon",
       `-PVERSION_NAME=${version}`,
       "-PdebugbundlePublishRepo=/android-sdk-source/.rn-smoke-maven",
+      "-PsignAllPublications=false",
       "publishAllPublicationsToSmokeRepository"
     ]);
     cpSync(dockerPublishedRepo, androidMavenRepo, { recursive: true });
@@ -152,6 +153,7 @@ function stageAndroidSdk() {
       "--no-daemon",
       `-PVERSION_NAME=${version}`,
       `-PdebugbundlePublishRepo=${androidMavenRepo}`,
+      "-PsignAllPublications=false",
       "publishAllPublicationsToSmokeRepository"
     ], {
       cwd: androidSdkSource,

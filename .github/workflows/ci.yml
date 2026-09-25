@@ -70,6 +70,7 @@ jobs:
             --no-daemon \
             -PVERSION_NAME=3.0.0-SNAPSHOT \
             -PdebugbundlePublishRepo="${{ github.workspace }}/.smoke/android-maven" \
+            -PsignAllPublications=false \
             publishAllPublicationsToSmokeRepository
       - run: >
           gradle --no-daemon
