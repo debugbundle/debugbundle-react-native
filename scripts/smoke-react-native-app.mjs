@@ -92,15 +92,15 @@ function stageAndroidSdk() {
   if (!version) {
     throw new Error("Unable to resolve VERSION_NAME from the coordinated Android SDK source");
   }
-  const stagedBomMetadata = resolve(
+  const stagedBomPom = resolve(
     androidMavenRepo,
     "com",
     "debugbundle",
     "debugbundle-android-bom",
     version,
-    "maven-metadata.xml"
+    `debugbundle-android-bom-${version}.pom`
   );
-  if (process.env.RN_SMOKE_REUSE_STAGED_ANDROID === "1" && existsSync(stagedBomMetadata)) {
+  if (process.env.RN_SMOKE_REUSE_STAGED_ANDROID === "1" && existsSync(stagedBomPom)) {
     stagedAndroidVersion = version;
     return;
   }
@@ -164,8 +164,8 @@ function stageAndroidSdk() {
       }
     });
   }
-  if (!existsSync(stagedBomMetadata)) {
-    throw new Error(`Coordinated Android SDK publication did not create ${stagedBomMetadata}`);
+  if (!existsSync(stagedBomPom)) {
+    throw new Error(`Coordinated Android SDK publication did not create ${stagedBomPom}`);
   }
   stagedAndroidVersion = version;
 }
