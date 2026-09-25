@@ -53,6 +53,18 @@ try {
         throw new Error("expected redacted context before native enqueue");
       }
 
+      let hookCalled = false;
+      const hooked = createDebugBundleClient({ projectToken: "dbp_smoke", beforeSend(event) {
+        hookCalled = true;
+        return { ...event, payload: { ...event.payload, message: "filtered" } };
+      } });
+      hooked.captureLog("private application text", "error");
+      if (hookCalled) throw new Error("beforeSend ran inside capture");
+      await hooked.flush();
+      if (!hookCalled || nativeModule.events.at(-1)?.payload.message !== "filtered") {
+        throw new Error("deferred hook did not preserve replacement semantics");
+      }
+
       const fetchCalls = [];
       const fetch = createInstrumentedFetch(async (_url, init) => {
         fetchCalls.push(new Headers(init?.headers).get("X-DebugBundle-Trace-Id"));
@@ -68,6 +80,10 @@ try {
     `
   );
   await execFileAsync("node", ["smoke.mjs"], { cwd: smokeRoot, stdio: "pipe" });
+  const ownership = await execFileAsync("node", [
+    "--expose-gc", join(root, "scripts", "check-installed-ownership.mjs"), smokeRoot
+  ], { cwd: smokeRoot, stdio: "pipe" });
+  process.stdout.write(ownership.stdout);
 
   await rm(tarball, { force: true });
   console.log("packed smoke passed");

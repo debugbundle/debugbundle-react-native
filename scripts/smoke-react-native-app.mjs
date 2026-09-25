@@ -24,7 +24,7 @@ const projectName = "DebugBundleSmoke";
 const reactNativeVersion = process.env.RN_SMOKE_VERSION ?? "0.87.1";
 const cliVersion = process.env.RN_SMOKE_CLI_VERSION ?? "20.1.3";
 const usePublishedNativeSdk = process.env.RN_SMOKE_NATIVE_SOURCE === "published";
-const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "2.0.0";
+const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "3.0.0";
 
 const args = new Set(process.argv.slice(2));
 const platforms = args.has("--ios")
@@ -36,6 +36,7 @@ const reuseFixture = args.has("--reuse-fixture");
 const skipBuild = args.has("--skip-build");
 const runtimeDelivery = args.has("--runtime");
 const expoDevelopmentBuild = args.has("--expo");
+const sourcePodsDiagnostic = process.env.RN_SMOKE_SOURCE_PODS === "1";
 const mockPort = Number(process.env.RN_SMOKE_MOCK_PORT ?? "18765");
 const runtimeTimeoutMs = Number(process.env.RN_SMOKE_RUNTIME_TIMEOUT_MS ?? "120000");
 if (runtimeDelivery && platforms.length !== 1) {
@@ -528,7 +529,12 @@ function assertAutolinkingConfig() {
 }
 
 async function runIosSmoke() {
-  run("pod", ["install"], { cwd: resolve(appDir, "ios") });
+  // Keep the default template's prebuilt path in release gates; source Pods can isolate
+  // an upstream app-embedding failure from this SDK's runtime behavior during diagnosis.
+  run("pod", ["install"], {
+    cwd: resolve(appDir, "ios"),
+    ...(sourcePodsDiagnostic ? { env: { RCT_USE_RN_DEP: "0", RCT_USE_PREBUILT_RNCORE: "0" } } : {})
+  });
   const { workspacePath, scheme } = resolveIosBuildIdentity();
   const destination = runtimeDelivery
     ? `id=${resolveIosSimulator()}`

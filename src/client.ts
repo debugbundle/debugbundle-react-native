@@ -19,7 +19,14 @@ import type {
 } from "./types.js";
 
 const SDK_NAME = "@debugbundle/sdk-react-native" as const;
-const DEFAULT_SDK_VERSION = "2.0.0";
+const DEFAULT_SDK_VERSION = "3.0.0";
+const MAX_PENDING_NATIVE_CALLS = 256;
+const MAX_PENDING_LOW_PRIORITY_CALLS = 224;
+const MAX_PENDING_NATIVE_BYTES = 4 * 1024 * 1024;
+const MAX_PENDING_LOW_PRIORITY_BYTES = 3 * 1024 * 1024;
+const MAX_NATIVE_EVENT_BYTES = 64 * 1024;
+const MAX_CONTEXT_FIELDS = 50;
+const MAX_CONTEXT_KEY_LENGTH = 128;
 const LOG_LEVELS: Record<DebugBundleLogLevel, number> = {
   debug: 10,
   info: 20,
@@ -69,6 +76,8 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
   private breadcrumbs: Array<Record<string, unknown>> = [];
   private probeBuffers = new Map<string, Array<Record<string, unknown>>>();
   private jsProbeActivationExpiresAt = 0;
+  private pendingNativeCalls = 0;
+  private pendingNativeBytes = 0;
 
   constructor(config: DebugBundleConfig = {}) {
     this.config = resolveConfig(config);
@@ -116,6 +125,8 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
   }
 
   captureException(error: unknown, context: DebugBundleCaptureContext = {}): void {
+    if (!this.config.captureErrors || !this.canCapture("frontend_exception", false) ||
+        !this.hasNativeCapacity(true)) return;
     const mergedContext = this.mergeContext(context);
     const sanitizedError = asRecord(sanitizeValue(error, { redactFields: this.config.redactFields }));
     this.enqueue("frontend_exception", {
@@ -134,15 +145,22 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
   }
 
   captureLog(message: string, level: DebugBundleLogLevel = "warning", context: DebugBundleCaptureContext = {}): void {
+    if (!this.isLogEnabled(level)) return;
+    const mergedContext = this.mergeContext(context);
     this.enqueue("log_event", {
       level,
       message: sanitizeValue(message, { redactFields: this.config.redactFields }),
       attributes: {
-        ...asRecord(sanitizeValue(this.mergeContext(context), { redactFields: this.config.redactFields })),
+        ...asRecord(sanitizeValue(mergedContext, { redactFields: this.config.redactFields })),
         source: "javascript"
       }
-    }, stringValue(context.trace_id), true, undefined,
-    this.config.captureLogs && LOG_LEVELS[level] >= LOG_LEVELS[this.config.logLevel]);
+    }, stringValue(mergedContext.trace_id), true);
+  }
+
+  isLogEnabled(level: DebugBundleLogLevel): boolean {
+    const rank = LOG_LEVELS[level];
+    return rank !== undefined && this.config.captureLogs && rank >= LOG_LEVELS[this.config.logLevel] &&
+      this.canCapture("log_event", true) && this.hasNativeCapacity(rank >= LOG_LEVELS.error);
   }
 
   captureRequest(
@@ -150,6 +168,7 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     response: DebugBundleResponseInfo,
     context: DebugBundleCaptureContext = {}
   ): void {
+    if (!this.config.captureNetwork || !this.canCapture("request_event", true) || !this.hasNativeCapacity(false)) return;
     const mergedContext = this.mergeContext(context);
     const traceId = request.traceId ?? stringValue(mergedContext.trace_id);
     const parsedUrl = parseRequestUrl(request.url);
@@ -167,16 +186,13 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
       }),
       duration_ms: response.durationMillis ?? 0
     };
-    if (this.config.captureNetwork) {
-      this.recordBreadcrumb("network_request", payload);
-    }
+    this.recordBreadcrumb("network_request", payload);
     this.enqueue(
       "request_event",
       payload,
       traceId,
       true,
-      asRecord(sanitizeValue(mergedContext, { redactFields: this.config.redactFields })),
-      this.config.captureNetwork
+      asRecord(sanitizeValue(mergedContext, { redactFields: this.config.redactFields }))
     );
   }
 
@@ -189,43 +205,61 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
   }
 
   setContext(key: string, value: unknown): void {
-    this.context[key] = sanitizeValue(value, { redactFields: this.config.redactFields });
-    if (this.nativeModule?.setContextValue) {
-      void safeNativeCall(() => this.nativeModule!.setContextValue!(key, { value: this.context[key] }), undefined);
-    } else if (this.nativeModule?.setContext) {
-      void safeNativeCall(() => this.nativeModule!.setContext!(key, this.context[key]), undefined);
+    if (typeof key !== "string" || !key || key.length > MAX_CONTEXT_KEY_LENGTH ||
+        !this.hasNativeCapacity(false) ||
+        !Object.hasOwn(this.context, key) && Object.keys(this.context).length >= MAX_CONTEXT_FIELDS) return;
+    try {
+      // Include the field name in mandatory privacy before local or native ownership.
+      const fields = asRecord(sanitizeValue({ [key]: value }, { redactFields: this.config.redactFields }));
+      if (!Object.hasOwn(fields, key)) return;
+      const entry = { value: fields[key] };
+      this.context = { ...this.context, [key]: entry.value };
+      const nativeModule = this.nativeModule;
+      if (nativeModule?.setContextValue) {
+        this.enqueueNativeAuxiliary({ key, entry }, () => nativeModule.setContextValue!(key, entry));
+      } else if (nativeModule?.setContext) {
+        this.enqueueNativeAuxiliary({ key, entry }, () => nativeModule.setContext!(key, entry.value));
+      }
+    } catch {
+      // Context accessors and optional native integrations cannot escape into the host.
     }
   }
 
   probe(label: string, data: unknown | (() => unknown), options: DebugBundleProbeOptions = {}): void {
-    if (!label || this.probeBuffers.size >= this.config.maxProbeLabels && !this.probeBuffers.has(label)) {
-      return;
-    }
-    const nativeProbeActive = this.nativeModule?.isProbeActive?.(label) ?? false;
-    if (options.heavy && !nativeProbeActive && !this.hasActiveJsProbeActivation()) {
-      return;
-    }
-    const value = typeof data === "function" ? safeInvoke(data as () => unknown) : data;
-    const sanitizedData = objectWrap(sanitizeValue(value, { redactFields: this.config.redactFields }));
-    const occurredAt = new Date().toISOString();
-    const entry = {
-      label,
-      data: sanitizedData,
-      timestamp: occurredAt,
-      activation_id: null
-    };
-    const entries = this.probeBuffers.get(label) ?? [];
-    entries.push(entry);
-    this.probeBuffers.set(label, entries.slice(-this.config.maxProbeEntriesPerLabel));
-    if (this.nativeModule?.captureProbe) {
-      void safeNativeCall(
-        () => this.nativeModule!.captureProbe!(label, sanitizedData, occurredAt),
-        false
-      );
+    if (!label || label.length > MAX_CONTEXT_KEY_LENGTH || !this.hasNativeCapacity(false) ||
+        this.probeBuffers.size >= this.config.maxProbeLabels && !this.probeBuffers.has(label)) return;
+    try {
+      const nativeModule = this.nativeModule;
+      const nativeProbeActive = nativeModule?.isProbeActive?.(label) ?? false;
+      if (options.heavy && !nativeProbeActive && !this.hasActiveJsProbeActivation()) return;
+      const value = typeof data === "function" ? safeInvoke(data as () => unknown) : data;
+      const sanitizedData = objectWrap(sanitizeValue(value, { redactFields: this.config.redactFields }));
+      const occurredAt = new Date().toISOString();
+      const entry = { label, data: sanitizedData, timestamp: occurredAt, activation_id: null };
+      const entries = this.probeBuffers.get(label) ?? [];
+      entries.push(entry);
+      this.probeBuffers.set(label, entries.slice(-this.config.maxProbeEntriesPerLabel));
+      if (nativeModule?.captureProbe) {
+        this.enqueueNativeAuxiliary({ label, data: sanitizedData, occurredAt },
+          () => nativeModule.captureProbe!(label, sanitizedData, occurredAt));
+      }
+    } catch {
+      // Probe options, native activation readers and data access cannot throw into the host.
     }
   }
 
+  private enqueueNativeAuxiliary(payload: unknown, operation: () => unknown): void {
+    if (!this.hasNativeCapacity(false)) return;
+    const bytes = utf8ByteLength(JSON.stringify(payload));
+    if (bytes > MAX_NATIVE_EVENT_BYTES || this.pendingNativeBytes + bytes > MAX_PENDING_LOW_PRIORITY_BYTES) return;
+    this.pendingNativeCalls += 1;
+    this.pendingNativeBytes += bytes;
+    void safeNativeCall(operation, undefined).finally(() => this.releaseNativeCapacity(bytes));
+  }
+
   async flush(): Promise<void> {
+    // Hook preparation queued by earlier capture calls must reach the bridge first.
+    await Promise.resolve();
     if (!this.nativeModule) {
       return;
     }
@@ -280,45 +314,109 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     context?: Record<string, unknown>,
     localPolicyAllows = true
   ): void {
+    if (!localPolicyAllows) return;
     if (!this.canCapture(eventType, countTowardSession)) {
       return;
     }
-    const authoredEvent: DebugBundleEventEnvelope = {
-      schema_version: "2026-03-01",
-      event_id: generateId(),
-      event_type: eventType,
-      sdk_name: SDK_NAME,
-      sdk_version: this.config.sdkVersion,
-      service: {
-        name: this.config.service,
-        environment: this.config.environment,
-        runtime: "react-native",
-        framework: "react-native"
-      },
-      occurred_at: new Date().toISOString(),
-      ...(traceId ? { correlation: { trace_id: traceId } } : {}),
-      ...(context && Object.keys(context).length > 0 ? { context } : {}),
-      payload: this.nativeState.device
-        ? { ...payload, device: canonicalDevice(this.nativeState.device, this.config) }
-        : payload
-    };
-    const initial = protectEventFields(authoredEvent, this.config.redactFields);
-    if (!initial) return;
-    const event = applyBeforeSend(initial, this.config.beforeSend);
-    if (!event || !localPolicyAllows) {
-      return;
+    const highPriority = eventType === "frontend_exception" ||
+      eventType === "log_event" && (payload.level === "error" || payload.level === "critical");
+    if (!this.hasNativeCapacity(highPriority)) return;
+    this.pendingNativeCalls += 1;
+    let handedOff = false;
+    let reservedBytes = 0;
+    try {
+      const authoredEvent: DebugBundleEventEnvelope = {
+        schema_version: "2026-03-01",
+        event_id: generateId(),
+        event_type: eventType,
+        sdk_name: SDK_NAME,
+        sdk_version: this.config.sdkVersion,
+        service: {
+          name: this.config.service,
+          environment: this.config.environment,
+          runtime: "react-native",
+          framework: "react-native"
+        },
+        occurred_at: new Date().toISOString(),
+        ...(traceId ? { correlation: { trace_id: traceId } } : {}),
+        ...(context && Object.keys(context).length > 0 ? { context } : {}),
+        payload: this.nativeState.device
+          ? { ...payload, device: canonicalDevice(this.nativeState.device, this.config) }
+          : payload
+      };
+      const initial = protectEventFields(authoredEvent, this.config.redactFields);
+      if (!initial) return;
+      const config = this.config;
+      const nativeModule = this.nativeModule;
+      const initialBytes = utf8ByteLength(JSON.stringify(initial));
+      const byteLimit = highPriority ? MAX_PENDING_NATIVE_BYTES : MAX_PENDING_LOW_PRIORITY_BYTES;
+      if (initialBytes > MAX_NATIVE_EVENT_BYTES || this.pendingNativeBytes + initialBytes > byteLimit) return;
+      this.pendingNativeBytes += initialBytes;
+      reservedBytes = initialBytes;
+      if (!nativeModule) {
+        this.nativeState = degradedNativeState("native_module_unavailable");
+        return;
+      }
+      handedOff = true;
+      this.sendAdmittedEvent(initial, config, nativeModule, reservedBytes);
+    } catch {
+      this.nativeState = degradedNativeState("event_preparation_failed");
+    } finally {
+      if (!handedOff) this.releaseNativeCapacity(reservedBytes);
     }
-    const safeEvent = protectEventFields(event, this.config.redactFields);
-    if (!safeEvent) return;
-    if (!this.nativeModule) {
-      this.nativeState = degradedNativeState("native_module_unavailable");
-      return;
-    }
-    if (this.nativeModule.enqueueCanonicalEvent) {
-      void safeNativeCall(() => this.nativeModule!.enqueueCanonicalEvent!(safeEvent), undefined);
-    } else {
-      void safeNativeCall(() => this.nativeModule!.enqueueEvent(toLegacyNativeEvent(safeEvent)), undefined);
-    }
+  }
+
+  private sendAdmittedEvent(
+    initial: DebugBundleEventEnvelope,
+    config: ResolvedDebugBundleConfig,
+    nativeModule: NativeDebugBundleModule,
+    reservedBytes: number
+  ): void {
+    // This activation receives only a protected snapshot: deferred closures must
+    // not retain the raw capture payload/context through their lexical scope.
+      const prepareAndSend = async (): Promise<void> => {
+        if (this.config !== config) return;
+        const safeEvent = this.prepareAdmittedEvent(initial, config, nativeModule.enqueueCanonicalEvent !== undefined);
+        if (safeEvent === null) return;
+        const finalPriority = safeEvent.event_type === "frontend_exception" ||
+          safeEvent.event_type === "log_event" && ["error", "critical"].includes(String(safeEvent.payload.level));
+        const eventBytes = utf8ByteLength(JSON.stringify(safeEvent));
+        const finalLimit = finalPriority ? MAX_PENDING_NATIVE_BYTES : MAX_PENDING_LOW_PRIORITY_BYTES;
+        // The callback closure can retain the protected original until the bridge
+        // settles. Charge both it and the final snapshot instead of forgetting it.
+        if (eventBytes > MAX_NATIVE_EVENT_BYTES || this.pendingNativeBytes + eventBytes > finalLimit) return;
+        this.pendingNativeBytes += eventBytes;
+        reservedBytes += eventBytes;
+        if (nativeModule.enqueueCanonicalEvent) await nativeModule.enqueueCanonicalEvent(safeEvent);
+        else await nativeModule.enqueueEvent(safeEvent);
+      };
+      const operation = config.beforeSend === null
+        ? safeNativeCall(prepareAndSend, undefined)
+        : Promise.resolve().then(() => safeNativeCall(prepareAndSend, undefined));
+      void operation.finally(() => { this.releaseNativeCapacity(reservedBytes); });
+  }
+
+  private prepareAdmittedEvent(initial: DebugBundleEventEnvelope, config: ResolvedDebugBundleConfig, canonical: boolean): DebugBundleEventEnvelope | null {
+    // Exit this synchronous activation before awaiting the bridge. An application
+    // replacement may be huge before projection and must not survive suspension.
+    const event = applyBeforeSend(initial, config.beforeSend);
+    if (!event || this.config !== config) return null;
+    const safeEvent = protectEventFields(event, config.redactFields);
+    if (!safeEvent) return null;
+    if (safeEvent.event_type === "log_event" &&
+        (!config.captureLogs || !(LOG_LEVELS[safeEvent.payload.level as DebugBundleLogLevel] >= LOG_LEVELS[config.logLevel]))) return null;
+    if (safeEvent.event_type === "frontend_exception" && !config.captureErrors) return null;
+    return canonical ? safeEvent : toLegacyNativeEvent(safeEvent);
+  }
+
+  private hasNativeCapacity(highPriority: boolean): boolean {
+    return this.pendingNativeCalls < (highPriority ? MAX_PENDING_NATIVE_CALLS : MAX_PENDING_LOW_PRIORITY_CALLS) &&
+      this.pendingNativeBytes < (highPriority ? MAX_PENDING_NATIVE_BYTES : MAX_PENDING_LOW_PRIORITY_BYTES);
+  }
+
+  private releaseNativeCapacity(bytes: number): void {
+    this.pendingNativeCalls -= 1;
+    this.pendingNativeBytes -= bytes;
   }
 
   private canCapture(eventType: DebugBundleEventEnvelope["event_type"], countTowardSession: boolean): boolean {
@@ -331,7 +429,12 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
   }
 
   private mergeContext(context: DebugBundleCaptureContext): Record<string, unknown> {
-    return { ...this.context, ...context };
+    try {
+      return { ...this.context, ...context };
+    } catch {
+      // A hostile caller accessor cannot interrupt error reporting or application work.
+      return { ...this.context };
+    }
   }
 
   private snapshotProbeData(): Record<string, unknown> {
@@ -348,6 +451,21 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     return this.jsProbeActivationExpiresAt > Date.now();
   }
 
+}
+
+function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length &&
+             value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff) {
+      bytes += 4;
+      index += 1;
+    } else bytes += 3;
+  }
+  return bytes;
 }
 
 export function createDebugBundleClient(config: DebugBundleConfig = {}): DebugBundleReactNativeClient {

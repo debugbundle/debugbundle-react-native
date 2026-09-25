@@ -68,13 +68,13 @@ jobs:
           ./debugbundle-android/gradlew \
             -p debugbundle-android \
             --no-daemon \
-            -PVERSION_NAME=2.0.0-SNAPSHOT \
+            -PVERSION_NAME=3.0.0-SNAPSHOT \
             -PdebugbundlePublishRepo="${{ github.workspace }}/.smoke/android-maven" \
             publishAllPublicationsToSmokeRepository
       - run: >
           gradle --no-daemon
           -PreactNativeVersion=${{ matrix.rn-version }}
-          -PdebugBundleAndroidVersion=2.0.0-SNAPSHOT
+          -PdebugBundleAndroidVersion=3.0.0-SNAPSHOT
           -PdebugBundleAndroidRepository=${{ github.workspace }}/.smoke/android-maven
           :debugbundle-react-native:compileDebugJavaWithJavac
 

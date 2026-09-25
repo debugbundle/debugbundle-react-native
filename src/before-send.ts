@@ -50,6 +50,12 @@ export function applyBeforeSend(
   }
   try {
     const result = hook(cloneEvent(event));
+    // Hooks have synchronous return contracts. Contain mistaken async failures
+    // before treating their Promise as invalid and keeping the protected original.
+    if (result instanceof Promise) {
+      void result.catch(() => undefined);
+      return event;
+    }
     if (result === null) {
       return null;
     }

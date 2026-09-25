@@ -32,13 +32,13 @@ export function readNativeReleaseVersions() {
 export function validateNativeReleaseVersions(versions) {
   const issues = [];
   const major = Number(/^([0-9]+)\./.exec(versions.wrapper)?.[1]);
-  if (!Number.isInteger(major) || major < 2) issues.push("wrapper_major_unprotected");
+  if (!Number.isInteger(major) || major < 3) issues.push("wrapper_major_unprotected");
   for (const key of ["podspec", "client", "expoPlugin", "swiftBridge", "swiftBridgeFallback", "androidBridge", "androidBridgeFallback"]) {
     if (versions[key] !== versions.wrapper) issues.push(`wrapper_version_mismatch:${key}`);
   }
   if (versions.iosDependency !== `~> ${major}.0`) issues.push("ios_dependency_unprotected");
   const androidMajor = Number(/^([0-9]+)\./.exec(versions.androidGradle)?.[1]);
-  if (!Number.isInteger(androidMajor) || androidMajor < 2 || androidMajor !== major) {
+  if (!Number.isInteger(androidMajor) || androidMajor < 3 || androidMajor !== major) {
     issues.push("android_dependency_unprotected");
   }
   if (versions.androidRelease !== versions.androidGradle || versions.androidSmoke !== versions.androidGradle) {

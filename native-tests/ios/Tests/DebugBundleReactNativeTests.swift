@@ -81,7 +81,7 @@ final class DebugBundleReactNativeTests: XCTestCase {
 		)
 
 		let config = try XCTUnwrap(DebugBundle.recorder.config)
-		XCTAssertEqual(config.sdkVersion, "2.0.0")
+		XCTAssertEqual(config.sdkVersion, "3.0.0")
 		XCTAssertEqual(config.service, "react-native-app")
 		XCTAssertEqual(config.environment, "production")
 		XCTAssertEqual(config.batchSize, 10)

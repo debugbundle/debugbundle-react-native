@@ -2,7 +2,9 @@ import type { DebugBundleClient, DebugBundleLogLevel } from "./types.js";
 
 let restoreConsole: (() => void) | null = null;
 
-export function captureDebugBundleConsole(client: Pick<DebugBundleClient, "captureLog">): () => void {
+export function captureDebugBundleConsole(client: Pick<DebugBundleClient, "captureLog"> & {
+  isLogEnabled?: (level: DebugBundleLogLevel) => boolean;
+}): () => void {
   if (restoreConsole) {
     return restoreConsole;
   }
@@ -30,7 +32,10 @@ export function captureDebugBundleConsole(client: Pick<DebugBundleClient, "captu
     }
     inCapture = true;
     try {
+      if (client.isLogEnabled?.(level) === false) return;
       client.captureLog(args.map(String).join(" "), level, { source: "console" });
+    } catch {
+      // Console instrumentation must not change host logging behavior.
     } finally {
       inCapture = false;
     }

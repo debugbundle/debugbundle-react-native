@@ -45,4 +45,20 @@ describe("console capture", () => {
     expect(hostWarn).toHaveBeenCalledWith("outer");
     restore();
   });
+
+  it("does not format console arguments when the SDK rejects that level", () => {
+    const hostWarn = vi.fn();
+    const captureLog = vi.fn();
+    const toString = vi.fn(() => "expensive");
+    console.warn = hostWarn;
+    const restore = captureDebugBundleConsole({ captureLog, isLogEnabled: () => false });
+
+    const argument = { toString };
+    console.warn(argument);
+
+    expect(toString).not.toHaveBeenCalled();
+    expect(captureLog).not.toHaveBeenCalled();
+    expect(hostWarn).toHaveBeenCalledWith(argument);
+    restore();
+  });
 });

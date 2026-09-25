@@ -5,12 +5,13 @@ ANDROID_HOME ?= $(ANDROID_SDK_ROOT)
 ANDROID_USER_HOME ?= $(CURDIR)/../debugbundle-android/.android-home
 ANDROID_SDK_SOURCE ?= $(CURDIR)/../debugbundle-android
 ANDROID_COORDINATED_VERSION ?= $(shell sed -n 's/^VERSION_NAME=//p' "$(ANDROID_SDK_SOURCE)/gradle.properties")
-ANDROID_NATIVE_RELEASE_VERSION ?= 2.0.0
+ANDROID_NATIVE_RELEASE_VERSION ?= 3.0.0
 REACT_NATIVE_VERSION ?= 0.87.1
 GRADLE_USER_HOME ?= $(CURDIR)/.gradle-cache
 GRADLEW ?= $(CURDIR)/../debugbundle-android/gradlew
 GRADLE_RUNNER ?= docker
 GRADLE_IMAGE ?= gradle:9.4.1-jdk21
+NODE_IMAGE ?= node:22-bookworm-slim
 DOCKER_PLATFORM ?= linux/amd64
 DOCKER_WORKDIR := /workspace
 DOCKER_ANDROID_SDK_ROOT := /android-sdk
@@ -42,6 +43,14 @@ NATIVE_PLATFORM_TARGETS += ios-test
 endif
 
 .PHONY: build typecheck test pack smoke smoke-package-manager smoke-registry check-protected-native-pins android-compile android-test android-compile-published ios-test rn-smoke-ios rn-smoke-android rn-smoke-expo-android rn-smoke-expo-ios rn-smoke-ios-published rn-smoke-android-published rn-runtime-ios rn-runtime-android rn-runtime-ios-published rn-runtime-android-published rn-smoke verify verify-native clean
+
+.PHONY: test-docker
+test-docker:
+	docker run --rm --platform linux/arm64 -v "$(CURDIR):/workspace" -w /workspace $(NODE_IMAGE) npm test
+
+.PHONY: check-docker
+check-docker:
+	docker run --rm --platform linux/arm64 -v "$(CURDIR):/workspace" -w /workspace $(NODE_IMAGE) sh -c 'npm run typecheck && npm test && npm run build'
 
 build:
 	npm run build
@@ -125,3 +134,7 @@ verify-native: verify $(NATIVE_PLATFORM_TARGETS)
 
 clean:
 	rm -rf dist .smoke .gradle-cache-rn-smoke .native-coverage .build *.tgz
+
+.PHONY: packed-check-docker
+packed-check-docker:
+	docker run --rm --platform linux/arm64 -v "$(CURDIR):/workspace" -w /workspace $(NODE_IMAGE) sh -c 'node scripts/check-protected-native-pins.mjs && node scripts/smoke-packed.mjs'

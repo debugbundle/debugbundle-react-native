@@ -15,6 +15,7 @@ Published implementation:
 - React Navigation breadcrumb helpers.
 - `fetch` and `XMLHttpRequest` instrumentation with target-scoped `X-DebugBundle-Trace-Id`.
 - JS-side bounded serialization and redaction before native queue persistence.
+- Local log level, log capture, and request capture switches are checked before event construction or `beforeSend`. A stalled native bridge accepts at most 224 lower-priority event calls / 3 MiB and reserves 32 more calls / 1 MiB for errors and exceptions. Each event is capped at 64 KiB; excess calls are discarded.
 - Android and iOS native wrappers that delegate queueing, config/status, request capture, crash/error capture, flushing, and probe trigger activation to the native SDK foundations.
 - Repository-local Android Java, Swift, and Objective-C++ wrapper tests with an
   enforced 80% line-coverage floor for every handwritten native bridge source.
@@ -142,3 +143,7 @@ checks.
 ## Release
 
 The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The next protected release requires a matching 2.x wrapper/Swift pod line and a published Android 2.x BOM/module pin. `make check-protected-native-pins` refuses the current 1.x source line; update the wrapper version, native pins, and embedded SDK versions together only after the exact Android and Swift artifacts are available to Maven Central and CocoaPods consumers. The release workflow then compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.
+
+Probe and context native calls share the event bridge's pending count and byte limits, including reserved exception capacity. Saturated auxiliary calls are discarded without evaluating probe suppliers. Probe labels are limited to 128 characters. Persistent JS context retains at most 50 fields with keys up to 128 characters, and field-sensitive privacy runs before local retention and native handoff. Throwing capture context accessors are withheld without escaping into application code. These bounds do not move native SDK persistence off its caller thread.
+
+Version 3 defers optional `beforeSend` callbacks until capture returns. Callbacks run on the JavaScript event loop and must return promptly. Pending preparation and native delivery share bounded count/byte limits; valid expanded replacements may be dropped under pressure. See [the version3 migration guide](MIGRATION-3.0.md).

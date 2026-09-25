@@ -2,7 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [Unreleased]
+
+## [3.0.0] - 2026-09-25
+
+### Changed
+
+- Bound pending native probe and context calls with the shared event bridge budgets, contain throwing capture context accessors, and sanitize context field names before retaining or handing off values. Context keeps at most 50 fields with 128-character keys; saturated probes and context updates are best-effort drops.
+
+- Reject locally disabled or below-threshold logs and disabled request capture before JavaScript context redaction and `beforeSend`; filtered console records skip argument formatting when the SDK client exposes its eligibility check.
+- Limit unresolved native bridge event calls to 256 and 4 MiB, with 32 calls and 1 MiB reserved for errors and exceptions. Individual retained events are capped at 64 KiB; calls above capacity are discarded so a stalled bridge cannot retain an unbounded promise backlog.
 
 ## [2.0.0] - 2026-09-21
 
