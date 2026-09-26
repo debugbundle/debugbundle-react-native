@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-09-26
+
+### Fixed
+
+- Adopt Android 3.0.1 and require Swift 3.0.1 or later in the compatible 3.x line, bringing the native acknowledgement and bounded retry repairs into React Native installs. The TypeScript facade and native bridge APIs are unchanged.
+- Align embedded SDK versions and published-consumer pins with the patch release, and refresh native release and persistence guidance.
+
 ## [3.0.0] - 2026-09-25
 
 ### Changed

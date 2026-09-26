@@ -24,7 +24,7 @@ const projectName = "DebugBundleSmoke";
 const reactNativeVersion = process.env.RN_SMOKE_VERSION ?? "0.87.1";
 const cliVersion = process.env.RN_SMOKE_CLI_VERSION ?? "20.1.3";
 const usePublishedNativeSdk = process.env.RN_SMOKE_NATIVE_SOURCE === "published";
-const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "3.0.0";
+const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "3.0.1";
 
 const args = new Set(process.argv.slice(2));
 const platforms = args.has("--ios")

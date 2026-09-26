@@ -4,7 +4,7 @@ import DebugBundle
 
 @objc(DebugBundleReactNative)
 final class DebugBundleReactNative: NSObject {
-	private var currentSDKVersion = "3.0.0"
+	private var currentSDKVersion = "3.0.1"
 	private var currentService = "react-native-app"
 	private var currentEnvironment = "production"
 
@@ -14,7 +14,7 @@ final class DebugBundleReactNative: NSObject {
 		resolver resolve: @escaping RCTPromiseResolveBlock,
 		rejecter reject: @escaping RCTPromiseRejectBlock
 	) {
-		currentSDKVersion = config["sdkVersion"] as? String ?? "3.0.0"
+		currentSDKVersion = config["sdkVersion"] as? String ?? "3.0.1"
 		currentService = config["service"] as? String ?? "react-native-app"
 		currentEnvironment = config["environment"] as? String ?? "production"
 		let sdkConfig = DebugBundleConfig(

@@ -54,19 +54,19 @@ describe("repository package and release gates", () => {
   });
 
   it("keeps the wrapper and required native dependency release lines aligned", () => {
-    expect(packageJson.version).toBe("3.0.0");
-    expect(podspec).toContain('s.version      = "3.0.0"');
-    expect(podspec).toContain('s.dependency "DebugBundle", "~> 3.0"');
-    expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "3.0.0"');
-    expect(expoPlugin).toContain('"@debugbundle/sdk-react-native", "3.0.0"');
+    expect(packageJson.version).toBe("3.0.1");
+    expect(podspec).toContain('s.version      = "3.0.1"');
+    expect(podspec).toContain('s.dependency "DebugBundle", "~> 3.0", ">= 3.0.1"');
+    expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "3.0.1"');
+    expect(expoPlugin).toContain('"@debugbundle/sdk-react-native", "3.0.1"');
   });
 
   it("requires protected major native dependencies before the next release", () => {
     const protectedLine = {
-      wrapper: "3.0.0", podspec: "3.0.0", client: "3.0.0", expoPlugin: "3.0.0",
-      swiftBridge: "3.0.0", swiftBridgeFallback: "3.0.0",
-      androidBridge: "3.0.0", androidBridgeFallback: "3.0.0", iosDependency: "~> 3.0",
-      androidGradle: "3.0.0", androidRelease: "3.0.0", androidSmoke: "3.0.0"
+      wrapper: "3.0.1", podspec: "3.0.1", client: "3.0.1", expoPlugin: "3.0.1",
+      swiftBridge: "3.0.1", swiftBridgeFallback: "3.0.1",
+      androidBridge: "3.0.1", androidBridgeFallback: "3.0.1", iosDependency: "~> 3.0",
+      androidGradle: "3.0.1", androidRelease: "3.0.1", androidSmoke: "3.0.1"
     };
     expect(validateNativeReleaseVersions(protectedLine)).toEqual([]);
     expect(validateNativeReleaseVersions({ ...protectedLine, iosDependency: "~> 1.3" }))

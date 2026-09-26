@@ -19,7 +19,7 @@ import type {
 } from "./types.js";
 
 const SDK_NAME = "@debugbundle/sdk-react-native" as const;
-const DEFAULT_SDK_VERSION = "3.0.0";
+const DEFAULT_SDK_VERSION = "3.0.1";
 const MAX_PENDING_NATIVE_CALLS = 256;
 const MAX_PENDING_LOW_PRIORITY_CALLS = 224;
 const MAX_PENDING_NATIVE_BYTES = 4 * 1024 * 1024;

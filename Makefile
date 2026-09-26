@@ -5,7 +5,7 @@ ANDROID_HOME ?= $(ANDROID_SDK_ROOT)
 ANDROID_USER_HOME ?= $(CURDIR)/../debugbundle-android/.android-home
 ANDROID_SDK_SOURCE ?= $(CURDIR)/../debugbundle-android
 ANDROID_COORDINATED_VERSION ?= $(shell sed -n 's/^VERSION_NAME=//p' "$(ANDROID_SDK_SOURCE)/gradle.properties")
-ANDROID_NATIVE_RELEASE_VERSION ?= 3.0.0
+ANDROID_NATIVE_RELEASE_VERSION ?= 3.0.1
 REACT_NATIVE_VERSION ?= 0.87.1
 GRADLE_USER_HOME ?= $(CURDIR)/.gradle-cache
 GRADLEW ?= $(CURDIR)/../debugbundle-android/gradlew

@@ -1,6 +1,6 @@
 {
   "name": "@debugbundle/sdk-react-native",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "React Native SDK for DebugBundle mobile event capture.",
   "license": "Apache-2.0",
   "type": "module",
