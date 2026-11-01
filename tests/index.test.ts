@@ -21,6 +21,14 @@ describe("singleton facade", () => {
     });
     const restoreErrors = installDebugBundleErrorHandlers(DebugBundle);
 
+    const operation = DebugBundle.beginOperation();
+    expect(operation.operationId).toMatch(/^[0-9a-f-]{36}$/);
+    operation.close();
+    expect(DebugBundle.withOperationContext(scope => scope.evidenceScope.kind)).toBe("operation");
+    expect(DebugBundle.evidenceCapabilities.features).toEqual([]);
+    DebugBundle.captureRecovery({ failureRef: operation.operationId, attemptId: operation.operationId,
+      evidenceScope: operation.evidenceScope, state: "attempt_completed" });
+
     DebugBundle.setContext("release_stage", "test");
     DebugBundle.captureException(new Error("exception"), { trace_id: "trace-exception" });
     DebugBundle.captureError(new TypeError("error"));

@@ -1,6 +1,6 @@
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-import { DEFAULT_SENSITIVE_KEYS, isSensitiveKey } from "./privacy-keys.js";
-import { scrubCredentialText } from "./privacy-text.js";
+import { DEFAULT_SENSITIVE_KEYS, createSensitiveKeyMatcher } from "./privacy-keys.js";
+import { createCredentialTextScrubber } from "./privacy-text.js";
 
 const REDACTED = "[REDACTED]";
 const MAX_DEPTH = 16;
@@ -23,8 +23,8 @@ interface WorkState {
   textBytes: number;
   redactionCount: number;
   seen: WeakSet<object>;
-  keys: string[];
-  extra: readonly string[];
+  sensitiveKey: (key: string) => boolean;
+  scrubText: (value: string) => string;
   maxTotalBytes: number;
 }
 
@@ -72,7 +72,7 @@ function sanitizeString(value: string, state: WorkState, allowStructured: boolea
     }
   }
 
-  const result = scrubCredentialText(value, state.extra);
+  const result = state.scrubText(value);
   if (result !== value) state.redactionCount += 1;
   if ((value.startsWith("{") || value.startsWith("[")) && result === value &&
       /(?:password|token|secret|authorization|cookie)["']?\s*[:=]/i.test(value)) {
@@ -114,14 +114,14 @@ function sanitizeValue(value: unknown, state: WorkState, depth: number, allowStr
       }
       state.textBytes += byteLength(key);
       if (state.textBytes > state.maxTotalBytes) throw new BudgetExceeded();
-      const safeKey = scrubCredentialText(key, state.extra);
+      const safeKey = state.scrubText(key);
       if (safeKey !== key) {
         state.redactionCount += 1;
         continue;
       }
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
       if (descriptor === undefined || !("value" in descriptor)) throw new TypeError("unsafe_input");
-      const safeValue = isSensitiveKey(key, state.keys)
+      const safeValue = state.sensitiveKey(key)
         ? mask(state)
         : sanitizeValue(descriptor.value, state, depth + 1, allowStructured);
       Object.defineProperty(result, key, {
@@ -153,8 +153,8 @@ export function sanitizeTelemetry(value: unknown, options: TelemetrySanitization
       textBytes: 0,
       redactionCount: 0,
       seen: new WeakSet<object>(),
-      keys: [...DEFAULT_SENSITIVE_KEYS, ...extra],
-      extra,
+      sensitiveKey: createSensitiveKeyMatcher([...DEFAULT_SENSITIVE_KEYS, ...extra]),
+      scrubText: createCredentialTextScrubber(extra),
       maxTotalBytes
     };
     const sanitized = sanitizeValue(value, state, 0, true);

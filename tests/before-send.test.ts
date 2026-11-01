@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { applyBeforeSend } from "../src/before-send.js";
 import type { DebugBundleEventEnvelope } from "../src/types.js";
 
+const device = { user_agent: null, os: { name: null, version: null }, device_type: "unknown",
+  screen: { width: 0, height: 0 }, viewport: { width: 0, height: 0 }, device_pixel_ratio: null,
+  touch_capable: null, language: null, connection_type: null, color_scheme_preference: null };
+
 const EVENT_ID = "00000000-0000-4000-8000-000000000001";
 const ACTIVATION_ID = "00000000-0000-4000-8000-000000000002";
 const OCCURRED_AT = "2026-07-27T12:00:00.000Z";
@@ -13,7 +17,8 @@ function event(
     message: "boom",
     stack: "Error: boom",
     breadcrumbs: [],
-    probe_data: {}
+    probe_data: { version: 1, items: [] },
+    device
   }
 ): DebugBundleEventEnvelope {
   return {
@@ -50,7 +55,7 @@ describe("beforeSend event validation", () => {
   it("accepts every canonical payload family", () => {
     const cases: Array<DebugBundleEventEnvelope> = [
       event(),
-      event("frontend_breadcrumb", { breadcrumb_type: "screen", data: {} }),
+      event("frontend_breadcrumb", { breadcrumb_type: "route_change", data: {} }),
       event("log_event", { level: "warning", message: "slow", attributes: {} }),
       event("request_event", {
         method: "GET",
@@ -96,17 +101,14 @@ describe("beforeSend event validation", () => {
     const invalid: unknown[] = [
       [],
       { ...original, extra: true },
-      { ...original, schema_version: "legacy" },
+      { ...original, schema_version: "" },
       { ...original, event_id: "invalid" },
       { ...original, event_type: "unknown" },
-      { ...original, sdk_name: "other" },
       { ...original, sdk_version: "" },
       { ...original, occurred_at: "not-a-date" },
       { ...original, service: [] },
       { ...original, service: { ...original.service, name: "" } },
       { ...original, service: { ...original.service, environment: "" } },
-      { ...original, service: { ...original.service, runtime: "browser" } },
-      { ...original, service: { ...original.service, framework: "expo" } },
       { ...original, payload: [] }
     ];
 

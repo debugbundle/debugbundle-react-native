@@ -1,4 +1,4 @@
-import { DEFAULT_SENSITIVE_KEYS, isSensitiveKey } from "./privacy-keys.js";
+import { DEFAULT_SENSITIVE_KEYS, createSensitiveKeyMatcher } from "./privacy-keys.js";
 
 const REDACTED = "[REDACTED]";
 const BUILTIN_LABELS = [...DEFAULT_SENSITIVE_KEYS, "client_secret", "x_api_key",
@@ -34,7 +34,7 @@ function isValidCard(value: string): boolean {
   return sum % 10 === 0;
 }
 
-function scrubUrl(raw: string, keys: readonly string[]): string {
+function scrubUrl(raw: string, scrub: (value: string, scanUrls?: boolean) => string, sensitive: (key: string) => boolean): string {
   try {
     const url = new URL(raw);
     if (url.username || url.password) {
@@ -43,8 +43,8 @@ function scrubUrl(raw: string, keys: readonly string[]): string {
     }
     const nextQuery = new URLSearchParams();
     for (const [key, value] of url.searchParams) {
-      if (key.length > 128 || scrubCredentialText(key, keys, false) !== key) continue;
-      nextQuery.append(key, isSensitiveKey(key, keys) || scrubCredentialText(value, keys, false) !== value ? REDACTED : value);
+      if (key.length > 128 || scrub(key, false) !== key) continue;
+      nextQuery.append(key, sensitive(key) || scrub(value, false) !== value ? REDACTED : value);
     }
     url.search = nextQuery.toString();
     url.hash = "";
@@ -55,32 +55,33 @@ function scrubUrl(raw: string, keys: readonly string[]): string {
   }
 }
 
-/** Bounded caller input only. Returns stable replacement text, never the matching secret. */
-export function scrubCredentialText(input: string, additionalKeys: readonly string[], scanUrls = true): string {
-  const keys = [...DEFAULT_SENSITIVE_KEYS, ...additionalKeys];
-  if (PEM_START.test(input) && !PEM_COMPLETE.test(input)) return REDACTED;
-  let output = input;
-  if (/(?:password|token|secret|authorization|cookie)%3[ad]/i.test(output)) {
-    try {
-      output = decodeURIComponent(output);
-    } catch {
-      return REDACTED;
-    }
-  }
-  output = output.replace(PEM, REDACTED).replace(HEADER, "$1: [REDACTED]");
-  output = output.replace(BEARER, "$1 [REDACTED]").replace(DEBUGBUNDLE_TOKEN, REDACTED);
-  output = output.replace(ASSIGNMENT, "$1$2[REDACTED]");
-  if (additionalKeys.length > 0) {
-    for (const key of additionalKeys) {
-      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const named = new RegExp(`\\b(${escaped})\\b(["']?\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|[^\\s&,;]+)`, "gi");
-      output = output.replace(named, "$1$2[REDACTED]");
-    }
-  }
-  output = output.replace(CARD, (candidate) => isValidCard(candidate) ? REDACTED : candidate);
-  if (!scanUrls) return output;
-  return output.replace(URL_TEXT, (matched) => {
-    const trailing = matched.match(/[).,;]+$/)?.[0] ?? "";
-    return scrubUrl(matched.slice(0, matched.length - trailing.length), keys) + trailing;
+/** Compile each caller rule once per bounded protection operation, not per scalar. */
+export function createCredentialTextScrubber(additionalKeys: readonly string[]): (input: string, scanUrls?: boolean) => string {
+  const sensitive = createSensitiveKeyMatcher([...DEFAULT_SENSITIVE_KEYS, ...additionalKeys]);
+  const patterns = additionalKeys.map(key => {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b(${escaped})\\b(["']?\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|[^\\s&,;]+)`, "gi");
   });
+  const scrub = (input: string, scanUrls = true): string => {
+    if (PEM_START.test(input) && !PEM_COMPLETE.test(input)) return REDACTED;
+    let output = input;
+    if (/(?:password|token|secret|authorization|cookie)%3[ad]/i.test(output)) {
+      try {
+        output = decodeURIComponent(output);
+      } catch {
+        return REDACTED;
+      }
+    }
+    output = output.replace(PEM, REDACTED).replace(HEADER, "$1: [REDACTED]");
+    output = output.replace(BEARER, "$1 [REDACTED]").replace(DEBUGBUNDLE_TOKEN, REDACTED);
+    output = output.replace(ASSIGNMENT, "$1$2[REDACTED]");
+    for (const pattern of patterns) output = output.replace(pattern, "$1$2[REDACTED]");
+    output = output.replace(CARD, (candidate) => isValidCard(candidate) ? REDACTED : candidate);
+    if (!scanUrls) return output;
+    return output.replace(URL_TEXT, (matched) => {
+      const trailing = matched.match(/[).,;]+$/)?.[0] ?? "";
+      return scrubUrl(matched.slice(0, matched.length - trailing.length), scrub, sensitive) + trailing;
+    });
+  };
+  return scrub;
 }

@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### 3.1.0 candidate
+
+- Reuse bounded custom privacy patterns and sensitive-key lookups within each
+  protection operation, preserving literal matching and caller-policy isolation.
+- Add complete-path evidence capabilities, bounded structured JS errors,
+  synchronous operation scopes, and opt-in explicit recovery observations.
+- Forward evidence options and native proof through the existing Android and iOS
+  bridges, with coordinated native 3.1.0 dependencies.
+- Validate owned before-send replacements against the complete canonical event
+  contract, retain allowed event/SDK metadata changes, and repeat privacy and
+  bounded association checks before native handoff.
+- Preserve native device hydration, reject unsafe error getters and recursive
+  causes, and document unavailable engine evidence without inventing locations.
+- Keep fatal JS evidence smaller and bypass application hooks on that path.
+
 ## [3.0.1] - 2026-09-26
 
 ### Fixed

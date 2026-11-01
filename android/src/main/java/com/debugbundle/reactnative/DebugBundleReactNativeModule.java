@@ -3,6 +3,8 @@ package com.debugbundle.reactnative;
 import android.content.Context;
 import com.debugbundle.android.DebugBundle;
 import com.debugbundle.android.DebugBundleConfig;
+import com.debugbundle.android.DebugBundleEvidenceOptions;
+import com.debugbundle.android.DebugBundleEvidenceCapabilities;
 import com.debugbundle.android.DebugBundleLogLevel;
 import com.debugbundle.android.DebugBundleRequestInfo;
 import com.debugbundle.android.DebugBundleResponseInfo;
@@ -14,6 +16,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableArray;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -199,12 +202,12 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
     }
   }
 
-  private String currentSdkVersion = "3.0.1";
+  private String currentSdkVersion = "3.1.0";
   private String currentService = "react-native-app";
   private String currentEnvironment = "production";
 
   private DebugBundleConfig createConfig(ReadableMap config) {
-    currentSdkVersion = stringOrDefault(config, "sdkVersion", "3.0.1");
+    currentSdkVersion = stringOrDefault(config, "sdkVersion", "3.1.0");
     currentService = stringOrDefault(config, "service", "react-native-app");
     currentEnvironment = stringOrDefault(config, "environment", "production");
     return DebugBundleConfig.create(
@@ -236,7 +239,10 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
         intOrDefault(config, "maxProbeEntriesPerLabel", 10),
         booleanOrDefault(config, "probeFlushOnError", true),
         stringSet(config, "redactFields", Collections.emptySet()),
-        currentSdkVersion);
+        currentSdkVersion).withEvidenceOptions(new DebugBundleEvidenceOptions(
+            booleanOrDefault(config, "captureExceptionEvidence", true),
+            booleanOrDefault(config, "captureRecoveryObservations", false),
+            evidenceCapabilities(config)));
   }
 
   private WritableMap stateMap() {
@@ -250,6 +256,11 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
     }
     state.putBoolean("nativeModuleAvailable", true);
     state.putNull("degradedReason");
+    DebugBundleEvidenceCapabilities proof = DebugBundleEvidenceCapabilities.normalize(nativeOperations.evidenceCapabilities());
+    WritableMap descriptor = writableMapFactory.create();
+    descriptor.putInt("version", proof.getVersion());
+    descriptor.putArray("features", writableMapFactory.array(proof.getFeatures()));
+    state.putMap("evidenceCapabilities", descriptor);
     return state;
   }
 
@@ -268,6 +279,22 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
       return Collections.emptyMap();
     }
     return nested.toHashMap();
+  }
+
+  private static DebugBundleEvidenceCapabilities evidenceCapabilities(ReadableMap config) {
+    if (!config.hasKey("evidenceCapabilities") || config.isNull("evidenceCapabilities")) return null;
+    Map<String, Object> descriptor = hashMap(config, "evidenceCapabilities");
+    if (descriptor.size() != 2 || !descriptor.containsKey("version") || !descriptor.containsKey("features") ||
+        !(descriptor.get("version") instanceof Number) || ((Number) descriptor.get("version")).doubleValue() != 1 ||
+        !(descriptor.get("features") instanceof List<?>)) return new DebugBundleEvidenceCapabilities();
+    List<?> raw = (List<?>) descriptor.get("features");
+    if (raw.size() > 4) return new DebugBundleEvidenceCapabilities();
+    List<String> features = new ArrayList<>();
+    for (Object value : raw) {
+      if (!(value instanceof String)) return new DebugBundleEvidenceCapabilities();
+      features.add((String) value);
+    }
+    return DebugBundleEvidenceCapabilities.normalize(new DebugBundleEvidenceCapabilities(1, features));
   }
 
   private static String stringOrDefault(ReadableMap map, String key, String fallback) {
@@ -422,9 +449,11 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
 
   interface WritableMapFactory {
     WritableMap create();
+    default WritableArray array(List<String> values) { return Arguments.fromList(values); }
   }
 
   interface NativeOperations {
+    default DebugBundleEvidenceCapabilities evidenceCapabilities() { return new DebugBundleEvidenceCapabilities(); }
     void initialize(Context context, DebugBundleConfig config);
 
     void captureException(Throwable error, Map<String, Object> context);
@@ -471,6 +500,8 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
   }
 
   private static final class DefaultNativeOperations implements NativeOperations {
+    @Override
+    public DebugBundleEvidenceCapabilities evidenceCapabilities() { return DebugBundle.INSTANCE.getEvidenceCapabilities(); }
     @Override
     public void initialize(Context context, DebugBundleConfig config) {
       DebugBundle.init(context, config);

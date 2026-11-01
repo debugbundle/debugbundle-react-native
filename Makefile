@@ -5,13 +5,14 @@ ANDROID_HOME ?= $(ANDROID_SDK_ROOT)
 ANDROID_USER_HOME ?= $(CURDIR)/../debugbundle-android/.android-home
 ANDROID_SDK_SOURCE ?= $(CURDIR)/../debugbundle-android
 ANDROID_COORDINATED_VERSION ?= $(shell sed -n 's/^VERSION_NAME=//p' "$(ANDROID_SDK_SOURCE)/gradle.properties")
-ANDROID_NATIVE_RELEASE_VERSION ?= 3.0.1
+ANDROID_NATIVE_RELEASE_VERSION ?= 3.1.0
 REACT_NATIVE_VERSION ?= 0.87.1
 GRADLE_USER_HOME ?= $(CURDIR)/.gradle-cache
 GRADLEW ?= $(CURDIR)/../debugbundle-android/gradlew
 GRADLE_RUNNER ?= docker
 GRADLE_IMAGE ?= gradle:9.4.1-jdk21
 NODE_IMAGE ?= node:22-bookworm-slim
+RN_SMOKE_ARGS ?=
 DOCKER_PLATFORM ?= linux/amd64
 DOCKER_WORKDIR := /workspace
 DOCKER_ANDROID_SDK_ROOT := /android-sdk
@@ -47,6 +48,11 @@ endif
 .PHONY: test-docker
 test-docker:
 	docker run --rm --platform linux/arm64 -v "$(CURDIR):/workspace" -w /workspace $(NODE_IMAGE) npm test
+
+.PHONY: test-focused-docker
+test-focused-docker:
+	test -n "$(TEST_FILE)"
+	docker run --rm --platform linux/arm64 -v "$(CURDIR):/workspace" -w /workspace $(NODE_IMAGE) npx --no-install vitest run --coverage.enabled=false "$(TEST_FILE)"
 
 .PHONY: check-docker
 check-docker:
@@ -95,7 +101,7 @@ rn-smoke-ios:
 	node scripts/smoke-react-native-app.mjs --ios
 
 rn-runtime-ios:
-	node scripts/smoke-react-native-app.mjs --ios --runtime
+	node scripts/smoke-react-native-app.mjs --ios --runtime $(RN_SMOKE_ARGS)
 
 rn-runtime-ios-published:
 	RN_SMOKE_NATIVE_SOURCE=published node scripts/smoke-react-native-app.mjs --ios --runtime
@@ -138,3 +144,11 @@ clean:
 .PHONY: packed-check-docker
 packed-check-docker:
 	docker run --rm --platform linux/arm64 -v "$(CURDIR):/workspace" -w /workspace $(NODE_IMAGE) sh -c 'node scripts/check-protected-native-pins.mjs && node scripts/smoke-packed.mjs'
+
+.PHONY: package-manager-check-docker
+package-manager-check-docker:
+	docker run --rm --platform linux/arm64 -v "$(CURDIR):/workspace" -w /workspace node:26-bookworm-slim sh -c 'npm install --global pnpm@11.3.0 yarn@1.22.22 && npm run build && node scripts/smoke-package-manager.mjs npm && node scripts/smoke-package-manager.mjs pnpm && node scripts/smoke-package-manager.mjs yarn'
+
+.PHONY: evidence-performance
+evidence-performance:
+	docker run --rm --network none --platform linux/arm64 -v "$(CURDIR):/workspace" -w /workspace node:26-bookworm-slim sh -c 'npm run build && node --expose-gc --loader ./perf/native-loader.mjs ./perf/evidence-capture.mjs'

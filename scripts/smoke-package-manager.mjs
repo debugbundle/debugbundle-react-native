@@ -57,7 +57,7 @@ try {
     join(smokeRoot, "smoke.mjs"),
     `
       import { createDebugBundleClient } from "@debugbundle/sdk-react-native";
-      import { installRecordingNativeModule } from "@debugbundle/sdk-react-native/testing";
+      import { installRecordingNativeModule, createRecordingNativeModule } from "@debugbundle/sdk-react-native/testing";
 
       const nativeModule = installRecordingNativeModule();
       const client = createDebugBundleClient({
@@ -68,6 +68,22 @@ try {
       client.captureException(new Error("package manager smoke"));
       if (nativeModule.events.length !== 1 || nativeModule.events[0].sdk_name !== "@debugbundle/sdk-react-native") {
         throw new Error("installed package did not preserve the React Native event boundary");
+      }
+      const evidenceNative = installRecordingNativeModule(createRecordingNativeModule({ status: "healthy",
+        evidenceCapabilities: { version: 1, features: ["exception_evidence_v1", "recovery_v1"] } }));
+      const evidenceClient = createDebugBundleClient({ projectToken: "dbp_package_manager_smoke", captureRecoveryObservations: true });
+      const failureRef = "11111111-1111-4111-8111-111111111111";
+      evidenceClient.withOperationContext(() => {
+        evidenceClient.captureException(new Error("package evidence", { cause: new Error("native cause") }), { failureRef });
+        evidenceClient.captureRecovery({ failureRef, attemptId: "22222222-2222-4222-8222-222222222222", state: "attempt_completed", statusCode: 200 });
+      });
+      await evidenceClient.flush();
+      const failure = evidenceNative.events.find(event => event.event_type === "frontend_exception");
+      const recovery = evidenceNative.events.find(event => event.event_type === "diagnostic_context");
+      if (failure?.payload.exception_evidence?.nodes.length !== 2 || recovery?.payload.failure_ref !== failureRef
+          || recovery?.payload.state !== "attempt_completed" || recovery?.payload.status_code !== 200
+          || JSON.stringify(recovery?.payload.scope) !== JSON.stringify(failure?.context.evidence_reference.scope)) {
+        throw new Error("installed package did not preserve independent recovery and cause evidence");
       }
     `
   );

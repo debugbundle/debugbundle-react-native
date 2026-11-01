@@ -19,12 +19,22 @@ function splitKeyIntoSegments(key: string): string[] {
 }
 
 export function isSensitiveKey(key: string, sensitiveKeys: readonly string[]): boolean {
+  return createSensitiveKeyMatcher(sensitiveKeys)(key);
+}
+
+/** Operation-owned lookup: bounded caller policy never enters a global cache. */
+export function createSensitiveKeyMatcher(sensitiveKeys: readonly string[]): (key: string) => boolean {
+  const exact = new Set(sensitiveKeys);
+  const canonicalSensitiveKeys = new Set(sensitiveKeys.map(canonicalizeSensitiveKey));
+  return key => matchesSensitiveKey(key, exact, canonicalSensitiveKeys);
+}
+
+function matchesSensitiveKey(key: string, exact: ReadonlySet<string>, canonicalSensitiveKeys: ReadonlySet<string>): boolean {
   const normalized = key.trim().toLowerCase();
-  if (sensitiveKeys.includes(normalized)) {
+  if (exact.has(normalized)) {
     return true;
   }
 
-  const canonicalSensitiveKeys = new Set(sensitiveKeys.map(canonicalizeSensitiveKey));
   const segments = splitKeyIntoSegments(key);
   for (let start = 0; start < segments.length; start += 1) {
     let combined = "";

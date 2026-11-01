@@ -5,6 +5,7 @@ import { TurboModuleRegistry } from "react-native";
 export interface Spec extends TurboModule {
   initialize(config: UnsafeObject): Promise<UnsafeObject>;
   enqueueCanonicalEvent?(event: UnsafeObject): Promise<boolean>;
+  enqueueCanonicalEventJson?(event: string): Promise<boolean>;
   enqueueEvent(event: UnsafeObject): Promise<void>;
   captureProbe?(label: string, data: UnsafeObject, occurredAt: string): Promise<boolean>;
   isProbeActive?(label: string): boolean;

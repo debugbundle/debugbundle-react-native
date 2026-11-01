@@ -1,5 +1,5 @@
+import { runtimeCapabilities, runtimeIngestionFixture } from "./runtime-evidence-fixture.mjs";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -24,7 +24,7 @@ const projectName = "DebugBundleSmoke";
 const reactNativeVersion = process.env.RN_SMOKE_VERSION ?? "0.87.1";
 const cliVersion = process.env.RN_SMOKE_CLI_VERSION ?? "20.1.3";
 const usePublishedNativeSdk = process.env.RN_SMOKE_NATIVE_SOURCE === "published";
-const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "3.0.1";
+const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "3.1.0";
 
 const args = new Set(process.argv.slice(2));
 const platforms = args.has("--ios")
@@ -35,6 +35,7 @@ const platforms = args.has("--ios")
 const reuseFixture = args.has("--reuse-fixture");
 const skipBuild = args.has("--skip-build");
 const runtimeDelivery = args.has("--runtime");
+const evidencePerformance = process.env.RN_SMOKE_EVIDENCE_PERFORMANCE === "1";
 const expoDevelopmentBuild = args.has("--expo");
 const sourcePodsDiagnostic = process.env.RN_SMOKE_SOURCE_PODS === "1";
 const mockPort = Number(process.env.RN_SMOKE_MOCK_PORT ?? "18765");
@@ -46,8 +47,7 @@ if (expoDevelopmentBuild && platforms.length !== 1) {
   throw new Error("Expo development-build smoke must target exactly one platform");
 }
 let stagedAndroidVersion = null;
-const receivedEventTypes = new Set();
-const runtimeRequestDiagnostics = [];
+const { startMockIngestion, waitForRuntimeEvents } = runtimeIngestionFixture(mockPort, runtimeTimeoutMs, evidencePerformance);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -177,10 +177,10 @@ function createApp(tarballPath) {
     if (expoDevelopmentBuild) {
       run("npx", [
         "--yes",
-        "create-expo-app@latest",
+        "create-expo-app@5.0.0",
         appDir,
         "--template",
-        "blank-typescript@sdk-57",
+        "blank-typescript@57.0.33",
         "--no-install",
         "--no-agents-md",
         "--yes"
@@ -248,14 +248,17 @@ function patchAppEntrypoint() {
     service: 'rn-runtime-smoke',
     environment: 'test',
     endpoint: '${runtimeEndpoint}',
-    batchSize: 1,
-    flushInterval: 250
+    batchSize: 10,
+    flushInterval: 250,
+    captureRecoveryObservations: true,
+    evidenceCapabilities: ${JSON.stringify(runtimeCapabilities)}
   });
   const smokeGlobal = globalThis as typeof globalThis & {__debugbundleRuntimeSmoke?: boolean};
   if (!smokeGlobal.__debugbundleRuntimeSmoke) {
     smokeGlobal.__debugbundleRuntimeSmoke = true;
     DebugBundle.setContext('release_stage', 'smoke');
     setTimeout(async () => {
+      ${evidencePerformance ? `await runHermesEvidencePerformance('http://127.0.0.1:${mockPort}/runtime-performance');` : ""}
       try {
         const networkCheck = await fetch('http://127.0.0.1:${mockPort}/runtime-check');
         console.log('[DebugBundleSmoke] network_check status=' + networkCheck.status);
@@ -263,7 +266,13 @@ function patchAppEntrypoint() {
         console.log('[DebugBundleSmoke] network_check error=' + String(error));
       }
       console.log('[DebugBundleSmoke] capture_start status=' + DebugBundle.status);
-      DebugBundle.captureException(new Error('rn runtime smoke'), {trace_id: 'rn-runtime-trace'});
+      await DebugBundle.flush();
+      const operation = DebugBundle.beginOperation();
+      const failureRef = '11111111-1111-4111-8111-111111111111';
+      DebugBundle.captureException(new Error('rn runtime smoke'), {trace_id: 'rn-runtime-trace', session_id: '0', failureRef});
+      DebugBundle.captureRecovery({failureRef, attemptId: '22222222-2222-4222-8222-222222222222',
+        state: 'attempt_completed', statusCode: 200, correlation: {trace_id: 'rn-runtime-trace', session_id: '0'}});
+      operation.close();
       DebugBundle.captureRequest(
         {method: 'GET', url: 'https://example.test/failure'},
         {statusCode: 503, durationMillis: 12},
@@ -285,6 +294,10 @@ function patchAppEntrypoint() {
     : "DebugBundle.init({projectToken: 'rn-smoke-token', service: 'rn-smoke', enabled: false});";
 
   let patched = original;
+  if (evidencePerformance && runtimeDelivery) {
+    cpSync(resolve(repoRoot, 'perf/hermes-evidence-capture.js'), resolve(appDir, 'hermes-evidence-capture.js'));
+    patched = `import {runHermesEvidencePerformance} from './hermes-evidence-capture';\n${patched}`;
+  }
   if (!patched.includes("@debugbundle/sdk-react-native")) {
     patched = patched.replace(
       "import {",
@@ -803,9 +816,8 @@ function assertAndroidRuntimeApkNetworkConfig(apkPath) {
   const configuredAnalyzer = process.env.ANDROID_HOME
     ? resolve(process.env.ANDROID_HOME, "cmdline-tools", "latest", "bin", "apkanalyzer")
     : null;
-  const analyzer = configuredAnalyzer && existsSync(configuredAnalyzer)
-    ? configuredAnalyzer
-    : "apkanalyzer";
+  const analyzer = process.env.RN_SMOKE_APKANALYZER
+    ?? (configuredAnalyzer && existsSync(configuredAnalyzer) ? configuredAnalyzer : "apkanalyzer");
   const manifest = run(analyzer, ["manifest", "print", apkPath], { capture: true });
   const requiredFragments = [
     "android.permission.INTERNET",
@@ -852,91 +864,6 @@ function collectAndroidRuntimeDiagnostics() {
   ].join("\n");
 }
 
-async function startMockIngestion() {
-  const server = createServer(async (request, response) => {
-    runtimeRequestDiagnostics.push(`${request.method ?? "UNKNOWN"}:${request.url ?? "unknown"}`);
-    if (request.method === "GET" && request.url === "/runtime-check") {
-      response.writeHead(204);
-      response.end();
-      return;
-    }
-    if (request.method === "GET" && request.url?.startsWith("/v1/sdk/config")) {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        probes_enabled: true,
-        remote_probes_enabled: false,
-        capture_policy: {
-          preset: "balanced",
-          capture_logs: "warning",
-          capture_request_events: "failures_only",
-          capture_breadcrumbs: "exception_only",
-          capture_probe_events: "buffer_only",
-          immediate_client_error_statuses: [],
-          immediate_client_error_path_rules: []
-        }
-      }));
-      return;
-    }
-    if (request.method !== "POST" || request.url !== "/v1/events") {
-      response.writeHead(404);
-      response.end();
-      return;
-    }
-
-    const chunks = [];
-    for await (const chunk of request) {
-      chunks.push(chunk);
-    }
-    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    if (!Array.isArray(body.events) || body.events.length === 0) {
-      runtimeRequestDiagnostics.push(`invalid_batch:${JSON.stringify(body)}`);
-      response.writeHead(400);
-      response.end();
-      return;
-    }
-    for (const event of body.events) {
-      if (
-        event?.schema_version !== "2026-03-01" ||
-        event?.sdk_name !== "@debugbundle/sdk-react-native" ||
-        event?.service?.name !== "rn-runtime-smoke" ||
-        event?.context?.release_stage !== "smoke" ||
-        typeof event?.event_id !== "string"
-      ) {
-        runtimeRequestDiagnostics.push(`invalid_event:${JSON.stringify(event)}`);
-        response.writeHead(422);
-        response.end();
-        return;
-      }
-      receivedEventTypes.add(event.event_type);
-    }
-    response.writeHead(202, { "content-type": "application/json" });
-    response.end(JSON.stringify({
-      accepted: body.events.length,
-      rejected: 0,
-      errors: []
-    }));
-  });
-  await new Promise((resolveListen, rejectListen) => {
-    server.once("error", rejectListen);
-    server.listen(mockPort, resolveListen);
-  });
-  return server;
-}
-
-async function waitForRuntimeEvents() {
-  const deadline = Date.now() + runtimeTimeoutMs;
-  while (Date.now() < deadline) {
-    if (receivedEventTypes.has("frontend_exception") && receivedEventTypes.has("request_event")) {
-      return;
-    }
-    await delay(250);
-  }
-  throw new Error(
-    `Timed out waiting for React Native runtime delivery; received ` +
-    `${[...receivedEventTypes].join(", ") || "no events"}; diagnostics: ` +
-    `${runtimeRequestDiagnostics.join(" | ") || "no ingestion requests"}`
-  );
-}
 
 if (args.has("--stage-android-sdk-only")) {
   stageAndroidSdk();

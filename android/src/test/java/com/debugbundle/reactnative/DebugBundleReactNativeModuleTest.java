@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import com.debugbundle.android.DebugBundleConfig;
+import com.debugbundle.android.DebugBundleEvidenceCapabilities;
 import com.debugbundle.android.DebugBundleLogLevel;
 import com.debugbundle.android.DebugBundleRequestInfo;
 import com.debugbundle.android.DebugBundleResponseInfo;
@@ -28,6 +29,7 @@ import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.ReadableType;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.uimanager.ViewManager;
 import java.util.HashMap;
 import java.util.List;
@@ -58,6 +60,45 @@ public final class DebugBundleReactNativeModuleTest {
         reactContext,
         nativeOperations,
         writableMapFactory);
+  }
+
+  @Test
+  public void forwardsEvidenceOptionsAndReportsOnlyNativePathProof() {
+    List<String> features = List.of("exception_evidence_v1", "recovery_v1");
+    when(nativeOperations.evidenceCapabilities()).thenReturn(new DebugBundleEvidenceCapabilities(1, features));
+    WritableArray array = mock(WritableArray.class);
+    when(writableMapFactory.array(features)).thenReturn(array);
+    module.initialize(readableMap(Map.of("captureExceptionEvidence", false,
+        "captureRecoveryObservations", true, "evidenceCapabilities", Map.of("version", 1.0, "features", features))), mock(Promise.class));
+    ArgumentCaptor<DebugBundleConfig> config = ArgumentCaptor.forClass(DebugBundleConfig.class);
+    verify(nativeOperations).initialize(eq(applicationContext), config.capture());
+    assertFalse(config.getValue().getEvidenceOptions().getCaptureExceptionEvidence());
+    assertTrue(config.getValue().getEvidenceOptions().getCaptureRecoveryObservations());
+    assertEquals(features, config.getValue().getEvidenceOptions().getEvidenceCapabilities().getFeatures());
+    verify(writableMap).putInt("version", 1);
+    verify(writableMap).putArray("features", array);
+    verify(writableMap).putMap("evidenceCapabilities", writableMap);
+  }
+
+  @Test
+  public void malformedEvidencePinsFailClosedWithoutDisablingPrimaryConfiguration() {
+    for (Map<String, Object> descriptor : List.<Map<String, Object>>of(
+        Map.of(), Map.of("version", 2, "features", List.of()),
+        Map.of("version", true, "features", List.of()),
+        Map.of("version", 1, "features", "invalid"),
+        Map.of("version", 1, "features", List.of(3)),
+        Map.of("version", 1, "features", List.of("future")),
+        Map.of("version", 1, "features", List.of("recovery_v1", "recovery_v1")),
+        Map.of("version", 1, "features", List.of("a", "b", "c", "d", "e")),
+        Map.of("version", 1, "features", List.of(), "extra", true))) {
+      reset(nativeOperations);
+      when(nativeOperations.statusName()).thenReturn("ONLINE");
+      module.initialize(readableMap(Map.of("projectToken", "fictional", "evidenceCapabilities", descriptor)), mock(Promise.class));
+      ArgumentCaptor<DebugBundleConfig> config = ArgumentCaptor.forClass(DebugBundleConfig.class);
+      verify(nativeOperations).initialize(eq(applicationContext), config.capture());
+      assertEquals("fictional", config.getValue().getProjectToken());
+      assertTrue(config.getValue().getEvidenceOptions().getEvidenceCapabilities().getFeatures().isEmpty());
+    }
   }
 
   @Test
@@ -249,11 +290,15 @@ public final class DebugBundleReactNativeModuleTest {
 
   @Test
   public void canonicalEventsNormalizeIntegralReactNativeNumbersRecursively() {
+    Map<String, Object> nullable = new HashMap<>();
+    nullable.put("stack", null);
+    nullable.put("items", java.util.Arrays.asList(null, false, 0.0));
     ReadableMap event = readableMap(Map.of(
         "event_type", "request_event",
         "payload", Map.of(
             "response_status", 503.0,
             "duration_ms", 12.5,
+            "nullable", nullable,
             "probe_data", Map.of(
                 "version", 1.0,
                 "values", List.of(2.0, 2.5)))));
@@ -269,6 +314,10 @@ public final class DebugBundleReactNativeModuleTest {
     Map<String, Object> probeData = (Map<String, Object>) payload.get("probe_data");
     assertEquals(503L, payload.get("response_status"));
     assertEquals(12.5, payload.get("duration_ms"));
+    Map<?, ?> copiedNullable = (Map<?, ?>) payload.get("nullable");
+    assertTrue(copiedNullable.containsKey("stack"));
+    assertEquals(null, copiedNullable.get("stack"));
+    assertEquals(java.util.Arrays.asList(null, false, 0L), copiedNullable.get("items"));
     assertEquals(1L, probeData.get("version"));
     assertEquals(List.of(2L, 2.5), probeData.get("values"));
     verify(promise).resolve(true);

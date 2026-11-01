@@ -4,6 +4,24 @@ import XCTest
 @testable import DebugBundleReactNativeBridge
 
 final class DebugBundleReactNativeTests: XCTestCase {
+	func testJsonCarrierPreservesNestedNullAndBoundsBytesAndDepthBeforeNativeCapture() throws {
+		let module = DebugBundleReactNative()
+		var result: Bool?
+		module.enqueueCanonicalEventJson("{\"payload\":{\"stack\":null,\"version\":1,\"empty\":{},\"items\":[null,false],\"text\":\"quoted \\\" { [\"}}",
+			resolver: { result = $0 as? Bool }, rejecter: rejectUnexpectedly)
+		XCTAssertEqual(result, true)
+		let payload = try XCTUnwrap(DebugBundle.recorder.externalEvents.first?["payload"] as? NSDictionary)
+		XCTAssertTrue(payload["stack"] is NSNull)
+		XCTAssertEqual((payload["version"] as? NSNumber)?.intValue, 1)
+		XCTAssertEqual((payload["empty"] as? NSDictionary)?.count, 0)
+		for invalid in ["[]", "{", String(repeating: "[", count: 17) + String(repeating: "]", count: 17),
+			"{\"x\":\"" + String(repeating: "x", count: 65536) + "\"}",
+			"{\"x\":\"" + String(repeating: "😀", count: 20000) + "\"}"] {
+			module.enqueueCanonicalEventJson(invalid, resolver: { result = $0 as? Bool }, rejecter: rejectUnexpectedly)
+			XCTAssertEqual(result, false)
+		}
+		XCTAssertEqual(DebugBundle.recorder.externalEvents.count, 1)
+	}
 	override func setUp() {
 		super.setUp()
 		DebugBundle.reset()
@@ -36,6 +54,9 @@ final class DebugBundleReactNativeTests: XCTestCase {
 				"captureActions": true,
 				"captureNetwork": false,
 				"captureLogs": false,
+				"captureExceptionEvidence": false,
+				"captureRecoveryObservations": true,
+				"evidenceCapabilities": ["version": 1, "features": ["exception_evidence_v1", "recovery_v1"]],
 				"logLevel": "debug",
 				"tracePropagationTargets": ["api.example.test"],
 				"offlineQueueMaxEvents": 75,
@@ -53,6 +74,9 @@ final class DebugBundleReactNativeTests: XCTestCase {
 
 		let config = try XCTUnwrap(DebugBundle.recorder.config)
 		XCTAssertEqual(config.sdkVersion, "1.2.7")
+		XCTAssertFalse(config.evidenceOptions.captureExceptionEvidence)
+		XCTAssertTrue(config.evidenceOptions.captureRecoveryObservations)
+		XCTAssertEqual(config.evidenceOptions.evidenceCapabilities?.features, ["exception_evidence_v1", "recovery_v1"])
 		XCTAssertEqual(config.service, "checkout-mobile")
 		XCTAssertEqual(config.environment, "staging")
 		XCTAssertEqual(config.endpoint.absoluteString, "https://ingest.example.test")
@@ -81,7 +105,7 @@ final class DebugBundleReactNativeTests: XCTestCase {
 		)
 
 		let config = try XCTUnwrap(DebugBundle.recorder.config)
-		XCTAssertEqual(config.sdkVersion, "3.0.1")
+		XCTAssertEqual(config.sdkVersion, "3.1.0")
 		XCTAssertEqual(config.service, "react-native-app")
 		XCTAssertEqual(config.environment, "production")
 		XCTAssertEqual(config.batchSize, 10)

@@ -1,6 +1,6 @@
 {
   "name": "@debugbundle/sdk-react-native",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "description": "React Native SDK for DebugBundle mobile event capture.",
   "license": "Apache-2.0",
   "type": "module",
@@ -49,7 +49,8 @@
     "DebugBundleReactNative.podspec",
     "CHANGELOG.md",
     "README.md",
-    "MIGRATION-3.0.md"
+    "MIGRATION-3.0.md",
+    "MIGRATION-3.1.md"
   ],
   "exports": {
     "./package.json": "./package.json",

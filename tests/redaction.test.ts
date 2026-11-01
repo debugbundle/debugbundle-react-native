@@ -4,6 +4,37 @@ import fixtures from "./fixtures/privacy-conformance.json";
 import { sanitizeTelemetry } from "../src/privacy-telemetry.js";
 
 describe("redaction", () => {
+  it("keeps custom privacy labels literal and isolated across nested documents and URLs", () => {
+    for (let index = 0; index < 24; index++) {
+      const field = `custom.${index}`;
+      const input = {
+        text: `${field}=secret customX${index}=visible password=hidden`,
+        nested: [{ [field]: "hidden", ordinary: "visible" }],
+        url: `https://example.test/path?${field}=hidden&ordinary=visible`
+      };
+      const safe = sanitizeTelemetry(input, { additionalKeys: [field] });
+      expect(safe).toMatchObject({ ok: true, value: {
+        text: `${field}=[REDACTED] customX${index}=visible password=[REDACTED]`,
+        nested: [{ [field]: "[REDACTED]", ordinary: "visible" }]
+      } });
+      expect(JSON.stringify(safe)).not.toContain("hidden");
+      expect(sanitizeTelemetry(`${field}=visible`)).toMatchObject({ ok: true, value: `${field}=visible` });
+    }
+  });
+  it("bounds cyclic native error causes without invoking accessors or formatters", () => {
+    let calls = 0;
+    const error = new Error("outer");
+    Object.defineProperty(error, "cause", { get() { calls++; return error; } });
+    expect(sanitizeValue(error)).toMatchObject({ message: "outer", cause: null });
+    expect(calls).toBe(0);
+    const cyclic = new Error("cycle");
+    Object.defineProperty(cyclic, "cause", { value: cyclic });
+    expect(sanitizeValue(cyclic)).toMatchObject({ message: "cycle", cause: "[Circular]" });
+    const child = new Error("child");
+    expect(sanitizeValue(new Error("parent", { cause: child }))).toMatchObject({ cause: { message: "child" } });
+    expect(sanitizeValue(new Error("parent", { cause: child }), { maxDepth: 1 }))
+      .toMatchObject({ cause: "[Truncated: depth]" });
+  });
   it("matches sensitive key segments and protects circular objects", () => {
     const value: Record<string, unknown> = { accessToken: "secret", safe: "ok" };
     value.self = value;

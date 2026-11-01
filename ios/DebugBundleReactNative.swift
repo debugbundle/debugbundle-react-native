@@ -4,7 +4,7 @@ import DebugBundle
 
 @objc(DebugBundleReactNative)
 final class DebugBundleReactNative: NSObject {
-	private var currentSDKVersion = "3.0.1"
+	private var currentSDKVersion = "3.1.0"
 	private var currentService = "react-native-app"
 	private var currentEnvironment = "production"
 
@@ -14,7 +14,7 @@ final class DebugBundleReactNative: NSObject {
 		resolver resolve: @escaping RCTPromiseResolveBlock,
 		rejecter reject: @escaping RCTPromiseRejectBlock
 	) {
-		currentSDKVersion = config["sdkVersion"] as? String ?? "3.0.1"
+		currentSDKVersion = config["sdkVersion"] as? String ?? "3.1.0"
 		currentService = config["service"] as? String ?? "react-native-app"
 		currentEnvironment = config["environment"] as? String ?? "production"
 		let sdkConfig = DebugBundleConfig(
@@ -48,7 +48,11 @@ final class DebugBundleReactNative: NSObject {
 			redactFields: stringSet(config["redactFields"], fallback: DebugBundleConfig.defaultRedactFields),
 			headerAllowlist: stringSet(config["headerAllowlist"], fallback: DebugBundleConfig.defaultHeaderAllowlist),
 			sdkVersion: currentSDKVersion
-		)
+		).withEvidenceOptions(DebugBundleEvidenceOptions(
+			captureExceptionEvidence: config["captureExceptionEvidence"] as? Bool ?? true,
+			captureRecoveryObservations: config["captureRecoveryObservations"] as? Bool ?? false,
+			evidenceCapabilities: evidenceCapabilities(config["evidenceCapabilities"])
+		))
 		DebugBundle.initialize(sdkConfig, transport: DebugBundleHTTPTransport())
 		resolve(state())
 	}
@@ -60,6 +64,22 @@ final class DebugBundleReactNative: NSObject {
 		rejecter reject: @escaping RCTPromiseRejectBlock
 	) {
 		resolve(DebugBundle.captureExternalEvent(dictionary(event)))
+	}
+
+	@objc(enqueueCanonicalEventJson:resolve:reject:)
+	func enqueueCanonicalEventJson(
+		_ event: String,
+		resolver resolve: @escaping RCTPromiseResolveBlock,
+		rejecter reject: @escaping RCTPromiseRejectBlock
+	) {
+		// TurboModule's NSDictionary conversion drops nested nulls before Swift sees
+		// them. Decode only bounded JSON bytes, then use the same native admission path.
+		guard let data = boundedEventJSON(event),
+			let object = try? JSONSerialization.jsonObject(with: data) as? NSDictionary else {
+			resolve(false)
+			return
+		}
+		resolve(DebugBundle.captureExternalEvent(dictionary(object)))
 	}
 
 	@objc(enqueueEvent:resolve:reject:)
@@ -177,9 +197,43 @@ final class DebugBundleReactNative: NSObject {
 		[
 			"status": DebugBundle.status.rawValue,
 			"lastEventAt": DebugBundle.lastEventAt.map { $0.timeIntervalSince1970 * 1000 } ?? NSNull(),
-			"nativeModuleAvailable": true
+			"nativeModuleAvailable": true,
+			"evidenceCapabilities": ["version": DebugBundle.evidenceCapabilities.version, "features": DebugBundle.evidenceCapabilities.features]
 		]
 	}
+}
+
+private func evidenceCapabilities(_ value: Any?) -> DebugBundleEvidenceCapabilities? {
+	guard let value, !(value is NSNull) else { return nil }
+	guard let descriptor = value as? [String: Any], Set(descriptor.keys) == Set(["version", "features"]),
+		let features = descriptor["features"] as? [String], features.count <= 4,
+		features.allSatisfy({ $0.utf8.prefix(65).count <= 64 }),
+		let data = try? JSONSerialization.data(withJSONObject: descriptor), data.count <= 512,
+		let decoded = try? JSONDecoder().decode(DebugBundleEvidenceCapabilities.self, from: data) else {
+		return DebugBundleEvidenceCapabilities()
+	}
+	return decoded
+}
+
+private func boundedEventJSON(_ value: String) -> Data? {
+	guard value.utf8.prefix(65_537).count <= 65_536 else { return nil }
+	var depth = 0, quoted = false, escaped = false
+	for byte in value.utf8 {
+		if quoted {
+			if escaped { escaped = false }
+			else if byte == 92 { escaped = true }
+			else if byte == 34 { quoted = false }
+		} else if byte == 34 { quoted = true }
+		else if byte == 123 || byte == 91 {
+			depth += 1
+			if depth > 17 { return nil }
+		} else if byte == 125 || byte == 93 {
+			depth -= 1
+			if depth < 0 { return nil }
+		}
+	}
+	guard depth == 0, !quoted else { return nil }
+	return value.data(using: .utf8)
 }
 
 private func dictionary(_ value: NSDictionary) -> [String: Any?] {

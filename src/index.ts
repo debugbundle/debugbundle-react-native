@@ -12,10 +12,15 @@ import type {
   DebugBundleResponseInfo,
   DebugBundleStatus
 } from "./types.js";
+import type { EvidenceCapabilities, OperationScope, RecoveryObservation } from "./evidence-types.js";
 
 const singleton = new DebugBundleReactNativeClient();
 
 export const DebugBundle = {
+  beginOperation(): OperationScope { return singleton.beginOperation(); },
+  withOperationContext<T>(operation: (scope: OperationScope) => T): T { return singleton.withOperationContext(operation); },
+  captureRecovery(observation: RecoveryObservation): void { singleton.captureRecovery(observation); },
+  get evidenceCapabilities(): EvidenceCapabilities { return singleton.evidenceCapabilities; },
   init(config: DebugBundleConfig): void {
     singleton.init(config);
     if (config.captureErrors !== false) {
@@ -71,6 +76,7 @@ export const DebugBundle = {
 export { createDebugBundleClient, DebugBundleReactNativeClient };
 export { captureDebugBundleConsole };
 export { installDebugBundleErrorHandlers };
+export type { EvidenceCapabilities, EvidenceFeature, EvidenceScope, OperationScope, RecoveryObservation } from "./evidence-types.js";
 export type {
   DebugBundleCaptureContext,
   DebugBundleBeforeSend,

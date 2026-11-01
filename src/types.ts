@@ -22,6 +22,9 @@ export interface DebugBundleConfig {
   maxEventsPerSession?: number;
   maxBreadcrumbs?: number;
   captureErrors?: boolean;
+  captureExceptionEvidence?: boolean;
+  captureRecoveryObservations?: boolean;
+  evidenceCapabilities?: EvidenceCapabilities;
   captureUnhandledRejections?: boolean;
   captureScreens?: boolean;
   captureActions?: boolean;
@@ -60,6 +63,9 @@ export interface ResolvedDebugBundleConfig {
   maxEventsPerSession: number;
   maxBreadcrumbs: number;
   captureErrors: boolean;
+  captureExceptionEvidence: boolean;
+  captureRecoveryObservations: boolean;
+  evidenceCapabilities: EvidenceCapabilities | null;
   captureUnhandledRejections: boolean;
   captureScreens: boolean;
   captureActions: boolean;
@@ -104,6 +110,8 @@ export interface DebugBundleResponseInfo {
 }
 
 export interface DebugBundleCaptureContext {
+  failureRef?: string;
+  evidenceScope?: EvidenceScope;
   [key: string]: unknown;
 }
 
@@ -112,26 +120,29 @@ export interface DebugBundleProbeOptions {
 }
 
 export interface DebugBundleEventEnvelope {
-  schema_version: "2026-03-01";
+  schema_version: string;
   event_id: string;
   event_type:
     | "frontend_exception"
+    | "backend_exception"
+    | "diagnostic_context"
+    | "deploy_metadata"
     | "frontend_breadcrumb"
     | "log_event"
     | "request_event"
     | "error_suppressed"
     | "probe_event";
-  sdk_name: "@debugbundle/sdk-react-native";
+  sdk_name: string;
   sdk_version: string;
   service: {
     name: string;
     environment: string;
-    runtime: "react-native";
-    framework: "react-native";
+    runtime?: string | null;
+    framework?: string | null;
   };
   occurred_at: string;
   correlation?: {
-    trace_id: string | null;
+    trace_id?: string | null;
     request_id?: string | null;
     session_id?: string | null;
     user_id_hash?: string | null;
@@ -143,6 +154,10 @@ export interface DebugBundleEventEnvelope {
 export interface DebugBundleClient {
   readonly status: DebugBundleStatus;
   readonly lastEventAt: number | null;
+  readonly evidenceCapabilities?: EvidenceCapabilities;
+  beginOperation?(): OperationScope;
+  withOperationContext?<T>(operation: (scope: OperationScope) => T): T;
+  captureRecovery?(observation: RecoveryObservation): void;
   init(config: DebugBundleConfig): void;
   captureException(error: unknown, context?: DebugBundleCaptureContext): void;
   captureError(error: unknown, context?: DebugBundleCaptureContext): void;
@@ -164,6 +179,7 @@ export interface DebugBundleClient {
 export interface NativeDebugBundleModule {
   initialize(config: NativeDebugBundleConfig): Promise<NativeDebugBundleState> | NativeDebugBundleState;
   enqueueCanonicalEvent?(event: DebugBundleEventEnvelope): Promise<boolean | void> | boolean | void;
+  enqueueCanonicalEventJson?(event: string): Promise<boolean | void> | boolean | void;
   /** Compatibility fallback implemented by native binaries released before the canonical bridge. */
   enqueueEvent(event: DebugBundleEventEnvelope): Promise<void> | void;
   captureProbe?(
@@ -185,6 +201,8 @@ export interface NativeDebugBundleState {
   status: DebugBundleStatus;
   lastEventAt?: number | null;
   device?: Record<string, unknown> | null;
+  evidenceCapabilities?: unknown;
   nativeModuleAvailable?: boolean;
   degradedReason?: string | null;
 }
+import type { EvidenceCapabilities, EvidenceScope, OperationScope, RecoveryObservation } from "./evidence-types.js";

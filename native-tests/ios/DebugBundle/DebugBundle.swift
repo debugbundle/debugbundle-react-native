@@ -13,7 +13,23 @@ public enum DebugBundleStatus: String {
 	case degraded
 }
 
+public struct DebugBundleEvidenceCapabilities: Codable {
+    public let version: Int
+    public let features: [String]
+    public init(version: Int = 1, features: [String] = []) { self.version = version; self.features = features }
+}
+public struct DebugBundleEvidenceOptions {
+    public var captureExceptionEvidence: Bool
+    public var captureRecoveryObservations: Bool
+    public var evidenceCapabilities: DebugBundleEvidenceCapabilities?
+    public init(captureExceptionEvidence: Bool = true, captureRecoveryObservations: Bool = false, evidenceCapabilities: DebugBundleEvidenceCapabilities? = nil) {
+        self.captureExceptionEvidence = captureExceptionEvidence; self.captureRecoveryObservations = captureRecoveryObservations; self.evidenceCapabilities = evidenceCapabilities
+    }
+}
+
 public struct DebugBundleConfig {
+    public var evidenceOptions = DebugBundleEvidenceOptions()
+    public func withEvidenceOptions(_ options: DebugBundleEvidenceOptions) -> Self { var copy = self; copy.evidenceOptions = options; return copy }
 	public static let defaultEndpoint = URL(string: "https://api.debugbundle.com/v1/events")!
 	public static let defaultRedactFields: Set<String> = ["password", "token"]
 	public static let defaultHeaderAllowlist: Set<String> = ["content-type", "user-agent"]
@@ -165,6 +181,7 @@ public final class DebugBundleRecorder: @unchecked Sendable {
 }
 
 public enum DebugBundle {
+    public static var evidenceCapabilities: DebugBundleEvidenceCapabilities { recorder.config?.evidenceOptions.evidenceCapabilities ?? .init() }
 	nonisolated(unsafe) public static var recorder = DebugBundleRecorder()
 
 	public static var status: DebugBundleStatus {

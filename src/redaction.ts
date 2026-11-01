@@ -1,5 +1,6 @@
 import { DEFAULT_SENSITIVE_KEYS, isSensitiveKey as privacySensitiveKey } from "./privacy-keys.js";
 import { sanitizeTelemetry } from "./privacy-telemetry.js";
+import { errorField, safeErrorStack } from "./safe-error-fields.js";
 
 const DEFAULT_REDACT_FIELDS = [
   ...DEFAULT_SENSITIVE_KEYS
@@ -93,9 +94,6 @@ function sanitize(
   if (typeof value === "function" || typeof value === "symbol") {
     return `[${typeof value}]`;
   }
-  if (value instanceof Error) {
-    return sanitizeError(value, options, depth, visited);
-  }
   if (depth >= options.maxDepth) {
     return "[Truncated: depth]";
   }
@@ -104,6 +102,7 @@ function sanitize(
       return "[Circular]";
     }
     visited.add(value);
+    if (value instanceof Error) return sanitizeError(value, options, depth, visited);
     if (Array.isArray(value)) {
       return value
         .slice(0, options.maxArrayLength)
@@ -124,11 +123,13 @@ function sanitizeError(
   depth: number,
   visited: WeakSet<object>
 ): Record<string, unknown> {
+  const name = errorField(error, "name"), message = errorField(error, "message");
+  const stack = safeErrorStack(error), cause = Object.getOwnPropertyDescriptor(error, "cause");
   return {
-    name: truncate(error.name || "Error", options.maxStringLength, options.redactFields),
-    message: truncate(error.message || "", options.maxStringLength, options.redactFields),
-    stack: typeof error.stack === "string" ? truncate(error.stack, options.maxStringLength * 4, options.redactFields) : null,
-    cause: "cause" in error ? sanitize(error.cause, options, depth + 1, visited, "cause") : null
+    name: truncate(typeof name === "string" && name ? name : "Error", options.maxStringLength, options.redactFields),
+    message: truncate(typeof message === "string" ? message : "", options.maxStringLength, options.redactFields),
+    stack: typeof stack === "string" ? truncate(stack, options.maxStringLength * 4, options.redactFields) : null,
+    cause: cause && "value" in cause ? sanitize(cause.value, options, depth + 1, visited, "cause") : null
   };
 }
 

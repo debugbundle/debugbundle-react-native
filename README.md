@@ -2,6 +2,11 @@
 
 React Native SDK for DebugBundle mobile apps.
 
+The unpublished 3.1.0 candidate adds proof-gated structured exception details and
+opt-in explicit recovery through both native bridges. See the
+[3.1 migration and API guide](MIGRATION-3.1.md) for options, operation scopes,
+recovery examples, runtime limitations, and coordinated native dependencies.
+
 This package targets iOS and Android React Native apps. It is a mobile direct-ingestion SDK, not a browser relay host: it does not provide CORS, `allowedOrigins`, `transportMode`, or `/debugbundle/browser` helpers.
 
 ## Status
@@ -147,3 +152,34 @@ The package publishes to npm from `v*` tags through GitHub Actions. Configure an
 Probe and context native calls share the event bridge's pending count and byte limits, including reserved exception capacity. Saturated auxiliary calls are discarded without evaluating probe suppliers. Probe labels are limited to 128 characters. Persistent JS context retains at most 50 fields with keys up to 128 characters, and field-sensitive privacy runs before local retention and native handoff. Throwing capture context accessors are withheld without escaping into application code. The native 3.x SDKs perform queue persistence on their bounded background workers; abrupt process termination before persistence completes can lose admitted events.
 
 Version 3 defers optional `beforeSend` callbacks until capture returns. Callbacks run on the JavaScript event loop and must return promptly. Pending preparation and native delivery share bounded count/byte limits; valid expanded replacements may be dropped under pressure. See [the version3 migration guide](MIGRATION-3.0.md).
+
+## Probe checkpoint guidance
+
+Application instrumentation supplies probe labels and bounded data. Deploy a new
+checkpoint before activating it. Remote activation affects future matching calls
+when policy permits; it does not inject code or recover unretained measurements.
+Built-in runtime/error/device collectors keep their documented SDK settings.
+
+Use fixed labels and allowlisted technical states: `media.preview.checkpoint`
+(stage/input kind/attempt), `auth.session.checkpoint` (observed session presence
+and result), `job.dependency.checkpoint` (named dependency/attempt/result), or
+`cache.preview.checkpoint` (hit/miss/coarse age bucket). Omit customer identifiers,
+tokens/cookies, cache keys, URLs and raw payloads. HTTP 200 or attempt completion
+alone does not establish semantic recovery.
+
+Empty probe data means no matching retained observation for the selected sample
+window. It does not confirm activation delivery to every SDK or execution of a
+label. Check the deployed SDK/wrapper version, instrumentation, scope, expiry,
+policy, sampling and delivery receipts. See the [probe recipes](https://debugbundle.com/docs/probes#bounded-checkpoint-recipes).
+
+`make evidence-performance` compares 20 identical native JS error/recovery pairs
+with evidence disabled/enabled and an empty/full low-priority bridge queue. It uses
+built SDK modules, a held in-memory bridge, network-disabled Docker and Node/V8.
+Ordinary timing runs are separate from allocation-sampled runs; the latter retain
+major/minor-GC-collected samples and report estimated allocation, not exact byte
+counts. Heap deltas, SDK-owned bytes and diagnostic budgets are reported separately.
+Setup and error creation are excluded; all original failures, two-node causes and
+queue release are checked. The [V8 protocol](https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/json/js_protocol.json)
+defines sampling semantics. These facade measurements do not establish Hermes,
+Android ART or actual native bridge performance; the native qualification lanes
+remain separate.

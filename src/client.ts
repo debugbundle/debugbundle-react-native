@@ -1,3 +1,11 @@
+import { utf8Bytes as utf8ByteLength } from "./owned-json.js";
+import { normalizeNativeState, stringValue, asRecord, objectWrap, parseRequestUrl, sanitizeScreenName, generateId, canonicalDevice, toLegacyNativeEvent, correlationFromContext, sameMobileDevice } from "./client-values.js";
+import { MobileEvidenceController, fitMobileEvent } from "./evidence-controller.js";
+import { normalizeCapabilities } from "./evidence-capabilities.js";
+import { canonicalEvent } from "./evidence-wire.js";
+import { ownJSON } from "./owned-json.js";
+import { snapshotError, snapshotExceptionEvidence } from "./exception-evidence.js";
+import type { EvidenceCapabilities, OperationScope, RecoveryObservation } from "./evidence-types.js";
 import { getNativeModule, degradedNativeState, safeNativeCall } from "./native.js";
 import { applyBeforeSend } from "./before-send.js";
 import { defaultRedactFields, DEFAULT_HEADER_ALLOWLIST, sanitizeHeaders, sanitizeValue } from "./redaction.js";
@@ -19,7 +27,7 @@ import type {
 } from "./types.js";
 
 const SDK_NAME = "@debugbundle/sdk-react-native" as const;
-const DEFAULT_SDK_VERSION = "3.0.1";
+const DEFAULT_SDK_VERSION = "3.1.0";
 const MAX_PENDING_NATIVE_CALLS = 256;
 const MAX_PENDING_LOW_PRIORITY_CALLS = 224;
 const MAX_PENDING_NATIVE_BYTES = 4 * 1024 * 1024;
@@ -78,9 +86,11 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
   private jsProbeActivationExpiresAt = 0;
   private pendingNativeCalls = 0;
   private pendingNativeBytes = 0;
+  private evidence: MobileEvidenceController;
 
   constructor(config: DebugBundleConfig = {}) {
     this.config = resolveConfig(config);
+    this.evidence = new MobileEvidenceController(this.config);
     if (Object.keys(config).length > 0) {
       this.init(config);
     }
@@ -94,8 +104,30 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     return this.nativeState.lastEventAt ?? null;
   }
 
+  get evidenceCapabilities(): EvidenceCapabilities {
+    return this.evidence.capabilities(this.nativeState, this.hasCanonicalBridge());
+  }
+
+  private hasCanonicalBridge(): boolean {
+    return this.nativeModule?.enqueueCanonicalEventJson !== undefined || this.nativeModule?.enqueueCanonicalEvent !== undefined;
+  }
+
+  beginOperation(): OperationScope { return this.evidence.begin(); }
+  withOperationContext<T>(operation: (scope: OperationScope) => T): T {
+    const scope = this.beginOperation();
+    try { return operation(scope); } finally { scope.close(); }
+  }
+  captureRecovery(observation: RecoveryObservation): void {
+    if (!this.canCapture("diagnostic_context", true) || !this.hasNativeCapacity(false) ||
+      !this.evidenceCapabilities.features.includes("recovery_v1")) return;
+    const prepared = this.evidence.recovery(observation);
+    if (prepared) this.enqueue("diagnostic_context", prepared.payload, null, true, undefined, true, true, prepared.correlation);
+  }
+
   init(config: DebugBundleConfig): void {
+    this.evidence.close();
     this.config = resolveConfig(config);
+    this.evidence = new MobileEvidenceController(this.config);
     this.nativeModule = getNativeModule();
     if (!this.config.enabled) {
       this.nativeState = { status: "disconnected", lastEventAt: null, nativeModuleAvailable: Boolean(this.nativeModule) };
@@ -110,11 +142,13 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
       return;
     }
     try {
+      const initializedConfig = this.config;
       const initialization = this.nativeModule.initialize(nativeConfig(this.config));
       if (isPromiseLike(initialization)) {
         this.nativeState = { status: "healthy", lastEventAt: null, nativeModuleAvailable: true };
         void safeNativeCall(async () => {
-          this.nativeState = normalizeNativeState(await initialization);
+          const state = await initialization;
+          if (this.config === initializedConfig) this.nativeState = normalizeNativeState(state);
         }, undefined);
       } else {
         this.nativeState = normalizeNativeState(initialization);
@@ -127,17 +161,21 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
   captureException(error: unknown, context: DebugBundleCaptureContext = {}): void {
     if (!this.config.captureErrors || !this.canCapture("frontend_exception", false) ||
         !this.hasNativeCapacity(true)) return;
-    const mergedContext = this.mergeContext(context);
-    const sanitizedError = asRecord(sanitizeValue(error, { redactFields: this.config.redactFields }));
+    const mergedContext = this.evidence.context(this.mergeContext(context), this.nativeState, this.hasCanonicalBridge());
+    const sanitizedError = snapshotError(error, this.config.redactFields);
+    const fatal = mergedContext.source === "react-native-global-error" && mergedContext.fatal === true;
+    const graph = this.evidenceCapabilities.features.includes("exception_evidence_v1")
+      ? snapshotExceptionEvidence(error, sanitizedError, this.config.redactFields, fatal) : undefined;
     this.enqueue("frontend_exception", {
       name: stringValue(sanitizedError.name) ?? "Error",
       message: stringValue(sanitizedError.message) ?? "Unknown error",
       stack: stringValue(sanitizedError.stack) ?? `${stringValue(sanitizedError.name) ?? "Error"}: ${stringValue(sanitizedError.message) ?? "Unknown error"}`,
       breadcrumbs: this.breadcrumbs.slice(),
-      probe_data: this.snapshotProbeData()
+      probe_data: this.snapshotProbeData(),
+      ...(graph ? { exception_evidence: graph } : {})
     }, stringValue(mergedContext.trace_id), false, asRecord(sanitizeValue(mergedContext, {
       redactFields: this.config.redactFields
-    })), this.config.captureErrors);
+    })), this.config.captureErrors, !fatal, correlationFromContext(mergedContext));
   }
 
   captureError(error: unknown, context: DebugBundleCaptureContext = {}): void {
@@ -266,7 +304,7 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     await safeNativeCall(async () => {
       await this.nativeModule!.flush();
       const state = await this.nativeModule!.getStatus();
-      this.nativeState = state;
+      this.nativeState = normalizeNativeState(state);
     }, undefined);
   }
 
@@ -290,7 +328,8 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     this.breadcrumbs.push(breadcrumb);
     this.breadcrumbs = this.breadcrumbs.slice(-this.config.maxBreadcrumbs);
     this.enqueue("frontend_breadcrumb", {
-      breadcrumb_type: type,
+      breadcrumb_type: ["route_change", "click", "form_submit", "console_log", "network_request"].includes(type) ? type
+        : type === "screen" ? "route_change" : type === "action" ? "click" : "console_log",
       data: breadcrumb.data
     }, null, true);
   }
@@ -312,7 +351,9 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     traceId: string | null,
     countTowardSession: boolean,
     context?: Record<string, unknown>,
-    localPolicyAllows = true
+    localPolicyAllows = true,
+    runBeforeSend = true,
+    correlation?: DebugBundleEventEnvelope["correlation"]
   ): void {
     if (!localPolicyAllows) return;
     if (!this.canCapture(eventType, countTowardSession)) {
@@ -324,6 +365,7 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     this.pendingNativeCalls += 1;
     let handedOff = false;
     let reservedBytes = 0;
+    let owner: string | null = null;
     try {
       const authoredEvent: DebugBundleEventEnvelope = {
         schema_version: "2026-03-01",
@@ -338,14 +380,14 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
           framework: "react-native"
         },
         occurred_at: new Date().toISOString(),
-        ...(traceId ? { correlation: { trace_id: traceId } } : {}),
+        ...(correlation ? { correlation } : traceId ? { correlation: { trace_id: traceId } } : {}),
         ...(context && Object.keys(context).length > 0 ? { context } : {}),
-        payload: this.nativeState.device
-          ? { ...payload, device: canonicalDevice(this.nativeState.device, this.config) }
-          : payload
+        payload: eventType === "diagnostic_context" ? payload : { ...payload, device: canonicalDevice(this.nativeState.device, this.config) }
       };
       const initial = protectEventFields(authoredEvent, this.config.redactFields);
       if (!initial) return;
+      owner = initial.event_id;
+      if (initial.event_type === "diagnostic_context" && (!canonicalEvent(ownJSON(initial)) || !this.evidence.budget.reserve(initial, owner))) return;
       const config = this.config;
       const nativeModule = this.nativeModule;
       const initialBytes = utf8ByteLength(JSON.stringify(initial));
@@ -358,11 +400,11 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
         return;
       }
       handedOff = true;
-      this.sendAdmittedEvent(initial, config, nativeModule, reservedBytes);
+      this.sendAdmittedEvent(initial, config, nativeModule, reservedBytes, runBeforeSend, !this.nativeState.device);
     } catch {
       this.nativeState = degradedNativeState("event_preparation_failed");
     } finally {
-      if (!handedOff) this.releaseNativeCapacity(reservedBytes);
+      if (!handedOff) { this.releaseNativeCapacity(reservedBytes); if (owner) this.evidence.budget.release(owner); }
     }
   }
 
@@ -370,15 +412,18 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     initial: DebugBundleEventEnvelope,
     config: ResolvedDebugBundleConfig,
     nativeModule: NativeDebugBundleModule,
-    reservedBytes: number
+    reservedBytes: number,
+    runBeforeSend: boolean,
+    hydrateNativeDevice: boolean
   ): void {
     // This activation receives only a protected snapshot: deferred closures must
     // not retain the raw capture payload/context through their lexical scope.
+      const evidence = this.evidence;
       const prepareAndSend = async (): Promise<void> => {
         if (this.config !== config) return;
-        const safeEvent = this.prepareAdmittedEvent(initial, config, nativeModule.enqueueCanonicalEvent !== undefined);
+        const safeEvent = this.prepareAdmittedEvent(initial, config, nativeModule.enqueueCanonicalEventJson !== undefined || nativeModule.enqueueCanonicalEvent !== undefined, runBeforeSend, hydrateNativeDevice);
         if (safeEvent === null) return;
-        const finalPriority = safeEvent.event_type === "frontend_exception" ||
+        const finalPriority = ["frontend_exception", "backend_exception"].includes(safeEvent.event_type) ||
           safeEvent.event_type === "log_event" && ["error", "critical"].includes(String(safeEvent.payload.level));
         const eventBytes = utf8ByteLength(JSON.stringify(safeEvent));
         const finalLimit = finalPriority ? MAX_PENDING_NATIVE_BYTES : MAX_PENDING_LOW_PRIORITY_BYTES;
@@ -387,26 +432,45 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
         if (eventBytes > MAX_NATIVE_EVENT_BYTES || this.pendingNativeBytes + eventBytes > finalLimit) return;
         this.pendingNativeBytes += eventBytes;
         reservedBytes += eventBytes;
-        if (nativeModule.enqueueCanonicalEvent) await nativeModule.enqueueCanonicalEvent(safeEvent);
+        if (safeEvent.event_type === "diagnostic_context") {
+          if (!evidence.budget.replace(initial.event_id, safeEvent)) return;
+        } else {
+          evidence.budget.release(initial.event_id);
+          if (["frontend_exception", "backend_exception"].includes(safeEvent.event_type)) evidence.budget.register(safeEvent);
+        }
+        // iOS TurboModule object conversion removes nested nulls. A string carrier
+        // preserves the validated JSON shape; older binaries keep their existing API.
+        if (nativeModule.enqueueCanonicalEventJson) await nativeModule.enqueueCanonicalEventJson(JSON.stringify(safeEvent));
+        else if (nativeModule.enqueueCanonicalEvent) await nativeModule.enqueueCanonicalEvent(safeEvent);
         else await nativeModule.enqueueEvent(safeEvent);
       };
-      const operation = config.beforeSend === null
+      const operation = config.beforeSend === null || !runBeforeSend
         ? safeNativeCall(prepareAndSend, undefined)
         : Promise.resolve().then(() => safeNativeCall(prepareAndSend, undefined));
-      void operation.finally(() => { this.releaseNativeCapacity(reservedBytes); });
+      void operation.finally(() => { this.releaseNativeCapacity(reservedBytes); evidence.budget.release(initial.event_id); });
   }
 
-  private prepareAdmittedEvent(initial: DebugBundleEventEnvelope, config: ResolvedDebugBundleConfig, canonical: boolean): DebugBundleEventEnvelope | null {
+  private prepareAdmittedEvent(initial: DebugBundleEventEnvelope, config: ResolvedDebugBundleConfig, canonical: boolean, runBeforeSend: boolean, hydrateNativeDevice: boolean): DebugBundleEventEnvelope | null {
     // Exit this synchronous activation before awaiting the bridge. An application
     // replacement may be huge before projection and must not survive suspension.
-    const event = applyBeforeSend(initial, config.beforeSend);
+    const event = applyBeforeSend(initial, runBeforeSend ? config.beforeSend : null);
     if (!event || this.config !== config) return null;
     const safeEvent = protectEventFields(event, config.redactFields);
     if (!safeEvent) return null;
     if (safeEvent.event_type === "log_event" &&
         (!config.captureLogs || !(LOG_LEVELS[safeEvent.payload.level as DebugBundleLogLevel] >= LOG_LEVELS[config.logLevel]))) return null;
-    if (safeEvent.event_type === "frontend_exception" && !config.captureErrors) return null;
-    return canonical ? safeEvent : toLegacyNativeEvent(safeEvent);
+    if (["frontend_exception", "backend_exception"].includes(safeEvent.event_type) && !config.captureErrors) return null;
+    if (!canonicalEvent(ownJSON(safeEvent))) return null;
+    const filtered = this.evidence.filter(safeEvent, this.nativeState, canonical);
+    if (!filtered) return null;
+    const fitted = fitMobileEvent(filtered);
+    if (fitted && hydrateNativeDevice && fitted.sdk_name === SDK_NAME && fitted.event_type === "frontend_exception" &&
+      sameMobileDevice(initial.payload.device, fitted.payload.device)) {
+      // This is the private native carrier, whose existing worker supplies device
+      // metadata before wire delivery. Preserve an explicitly changed hook device.
+      delete fitted.payload.device;
+    }
+    return fitted ? canonical ? fitted : toLegacyNativeEvent(fitted) : null;
   }
 
   private hasNativeCapacity(highPriority: boolean): boolean {
@@ -453,20 +517,6 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
 
 }
 
-function utf8ByteLength(value: string): number {
-  let bytes = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code < 0x80) bytes += 1;
-    else if (code < 0x800) bytes += 2;
-    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length &&
-             value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff) {
-      bytes += 4;
-      index += 1;
-    } else bytes += 3;
-  }
-  return bytes;
-}
 
 export function createDebugBundleClient(config: DebugBundleConfig = {}): DebugBundleReactNativeClient {
   return new DebugBundleReactNativeClient(config);
@@ -489,6 +539,9 @@ export function resolveConfig(config: DebugBundleConfig): ResolvedDebugBundleCon
     maxEventsPerSession: clampInteger(config.maxEventsPerSession, 100, 1, 10000),
     maxBreadcrumbs: clampInteger(config.maxBreadcrumbs, 20, 1, 200),
     captureErrors: config.captureErrors ?? true,
+    captureExceptionEvidence: config.captureExceptionEvidence ?? true,
+    captureRecoveryObservations: config.captureRecoveryObservations ?? false,
+    evidenceCapabilities: config.evidenceCapabilities ? normalizeCapabilities(config.evidenceCapabilities) : null,
     captureUnhandledRejections: config.captureUnhandledRejections ?? true,
     captureScreens: config.captureScreens ?? true,
     captureActions: config.captureActions ?? false,
@@ -541,178 +594,4 @@ function safeInvoke(producer: () => unknown): unknown {
 
 function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
   return Boolean(value && typeof (value as Promise<T>).then === "function");
-}
-
-function normalizeNativeState(state: NativeDebugBundleState): NativeDebugBundleState {
-  return {
-    ...state,
-    status: state.status || "healthy",
-    nativeModuleAvailable: state.nativeModuleAvailable ?? true
-  };
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
-function objectWrap(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : { value };
-}
-
-function parseRequestUrl(url: string): { path: string; query: Record<string, unknown> } {
-  try {
-    const parsed = new URL(url);
-    const query: Record<string, unknown> = {};
-    for (const [key, value] of parsed.searchParams) {
-      const existing = query[key];
-      if (existing === undefined) {
-        query[key] = value;
-      } else if (Array.isArray(existing)) {
-        existing.push(value);
-      } else {
-        query[key] = [existing, value];
-      }
-    }
-    return { path: parsed.pathname || "/", query };
-  } catch {
-    const [path = "/", rawQuery = ""] = url.split("?", 2);
-    const query: Record<string, unknown> = {};
-    for (const segment of rawQuery.split("&")) {
-      if (!segment) {
-        continue;
-      }
-      const [rawKey = "", rawValue = ""] = segment.split("=", 2);
-      const key = decodeQuerySegment(rawKey);
-      const value = decodeQuerySegment(rawValue);
-      const existing = query[key];
-      if (existing === undefined) {
-        query[key] = value;
-      } else if (Array.isArray(existing)) {
-        existing.push(value);
-      } else {
-        query[key] = [existing, value];
-      }
-    }
-    return { path: path || "/", query };
-  }
-}
-
-function decodeQuerySegment(value: string): string {
-  try {
-    return decodeURIComponent(value.replace(/\+/g, " "));
-  } catch {
-    return value;
-  }
-}
-
-function sanitizeScreenName(screenName: string): string {
-  return screenName.replace(/[^a-zA-Z0-9_.:/-]/g, "_").slice(0, 120);
-}
-
-function generateId(): string {
-  const cryptoLike = globalThis.crypto;
-  if (cryptoLike?.randomUUID) {
-    return cryptoLike.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (marker) => {
-    const random = Math.trunc(Math.random() * 16);
-    const value = marker === "x" ? random : (random & 0x3) | 0x8;
-    return value.toString(16);
-  });
-}
-
-function canonicalDevice(
-  nativeDevice: Record<string, unknown> | null | undefined,
-  config: ResolvedDebugBundleConfig
-): Record<string, unknown> {
-  const source = nativeDevice ?? {};
-  const sourceOs = asRecord(source.os);
-  const sourceScreen = asRecord(source.screen);
-  const sourceViewport = asRecord(source.viewport);
-  const width = nonNegativeInteger(sourceScreen.width ?? source.screen_width);
-  const height = nonNegativeInteger(sourceScreen.height ?? source.screen_height);
-  return {
-    user_agent: stringValue(source.user_agent),
-    os: {
-      name: stringValue(sourceOs.name ?? source.os_name),
-      version: stringValue(sourceOs.version ?? source.os_version)
-    },
-    device_type: canonicalDeviceType(source.device_type),
-    screen: { width, height },
-    viewport: {
-      width: nonNegativeInteger(sourceViewport.width ?? width),
-      height: nonNegativeInteger(sourceViewport.height ?? height)
-    },
-    device_pixel_ratio: positiveNumber(source.device_pixel_ratio),
-    touch_capable: typeof source.touch_capable === "boolean" ? source.touch_capable : null,
-    language: stringValue(source.language ?? source.locale),
-    connection_type: stringValue(source.connection_type),
-    color_scheme_preference: canonicalColorScheme(source.color_scheme_preference),
-    app_version: stringValue(source.app_version) ?? config.appVersion,
-    build_number: stringValue(source.build_number) ?? config.buildNumber,
-    release_channel: stringValue(source.release_channel) ?? config.releaseChannel,
-    api_level: nullableNonNegativeInteger(source.api_level),
-    manufacturer: stringValue(source.manufacturer),
-    model: stringValue(source.model),
-    timezone: stringValue(source.timezone),
-    battery_level: nonNegativeNumber(source.battery_level),
-    battery_charging: typeof source.battery_charging === "boolean"
-      ? source.battery_charging
-      : typeof source.charging === "boolean" ? source.charging : null,
-    free_disk_bytes: nullableNonNegativeInteger(source.free_disk_bytes),
-    free_memory_bytes: nullableNonNegativeInteger(source.free_memory_bytes),
-    jailbroken: typeof source.jailbroken === "boolean"
-      ? source.jailbroken
-      : typeof source.rooted === "boolean" ? source.rooted : null
-  };
-}
-
-function toLegacyNativeEvent(event: DebugBundleEventEnvelope): DebugBundleEventEnvelope {
-  const context = event.context ?? {};
-  const payload: Record<string, unknown> = { ...event.payload, context };
-  if (event.event_type === "frontend_exception") {
-    payload.error = {
-      name: event.payload.name,
-      message: event.payload.message,
-      stack: event.payload.stack
-    };
-  } else if (event.event_type === "request_event") {
-    payload.url = event.payload.path;
-  }
-  return { ...event, payload };
-}
-
-function canonicalDeviceType(value: unknown): "desktop" | "mobile" | "tablet" | "unknown" {
-  return value === "desktop" || value === "mobile" || value === "tablet" ? value : "unknown";
-}
-
-function canonicalColorScheme(value: unknown): "light" | "dark" | "no-preference" | null {
-  return value === "light" || value === "dark" || value === "no-preference" ? value : null;
-}
-
-function nonNegativeInteger(value: unknown): number {
-  return nullableNonNegativeInteger(value) ?? 0;
-}
-
-function nullableNonNegativeInteger(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? Math.trunc(value)
-    : null;
-}
-
-function positiveNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
-}
-
-function nonNegativeNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
