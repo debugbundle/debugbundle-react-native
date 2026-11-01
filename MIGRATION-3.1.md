@@ -1,7 +1,7 @@
-# React Native 3.1 candidate
+# React Native 3.1 compatibility
 
-Version 3.1.0 is an unpublished candidate. Rebuild the native binary with the
-coordinated Android 3.1.0 and Swift 3.1.0 foundations before enabling the new
+Version 3.1.0 adds compatible, negotiated evidence. Rebuild the native binary with
+Android 3.1.0 and Swift 3.1.1 or later in the compatible 3.x line before enabling the new
 evidence options. Existing capture methods and their return values are unchanged.
 An older native binary keeps ordinary error capture and disables unproven optional
 evidence. This document does not establish release or device qualification.
