@@ -56,7 +56,7 @@ describe("repository package and release gates", () => {
   it("keeps the wrapper and required native dependency release lines aligned", () => {
     expect(packageJson.version).toBe("3.1.0");
     expect(podspec).toContain('s.version      = "3.1.0"');
-    expect(podspec).toContain('s.dependency "DebugBundle", "~> 3.0", ">= 3.1.0"');
+    expect(podspec).toContain('s.dependency "DebugBundle", "~> 3.0", ">= 3.1.1"');
     expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "3.1.0"');
     expect(expoPlugin).toContain('"@debugbundle/sdk-react-native", "3.1.0"');
   });

@@ -2,7 +2,7 @@
 
 React Native SDK for DebugBundle mobile apps.
 
-The unpublished 3.1.0 candidate adds proof-gated structured exception details and
+Version 3.1.0 adds proof-gated structured exception details and
 opt-in explicit recovery through both native bridges. See the
 [3.1 migration and API guide](MIGRATION-3.1.md) for options, operation scopes,
 recovery examples, runtime limitations, and coordinated native dependencies.
@@ -147,7 +147,7 @@ checks.
 
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The 3.0.1 wrapper pins Android 3.0.1 and requires Swift 3.0.1 or later within the compatible 3.x CocoaPods line. `make check-protected-native-pins` checks the wrapper, native pins and embedded SDK versions together. Publish only after the exact Android and Swift artifacts are available and their published-consumer checks pass. The release workflow compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The 3.1.0 wrapper pins Android 3.1.0 and requires Swift 3.1.1 or later within the compatible 3.x CocoaPods line. `make check-protected-native-pins` checks the wrapper, native pins and embedded SDK versions together. Publish only after the exact Android and Swift artifacts are available and their published-consumer checks pass. The release workflow compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.
 
 Probe and context native calls share the event bridge's pending count and byte limits, including reserved exception capacity. Saturated auxiliary calls are discarded without evaluating probe suppliers. Probe labels are limited to 128 characters. Persistent JS context retains at most 50 fields with keys up to 128 characters, and field-sensitive privacy runs before local retention and native handoff. Throwing capture context accessors are withheld without escaping into application code. The native 3.x SDKs perform queue persistence on their bounded background workers; abrupt process termination before persistence completes can lose admitted events.
 

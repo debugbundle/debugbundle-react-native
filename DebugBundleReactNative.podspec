@@ -12,5 +12,5 @@ Pod::Spec.new do |s|
 
   s.dependency "React-Core"
   install_modules_dependencies(s) if defined?(install_modules_dependencies)
-  s.dependency "DebugBundle", "~> 3.0", ">= 3.1.0"
+  s.dependency "DebugBundle", "~> 3.0", ">= 3.1.1"
 end

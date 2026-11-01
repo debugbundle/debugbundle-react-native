@@ -4,14 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### 3.1.0 candidate
+### 3.1.0 — 2026-11-01
 
 - Reuse bounded custom privacy patterns and sensitive-key lookups within each
   protection operation, preserving literal matching and caller-policy isolation.
 - Add complete-path evidence capabilities, bounded structured JS errors,
   synchronous operation scopes, and opt-in explicit recovery observations.
 - Forward evidence options and native proof through the existing Android and iOS
-  bridges, with coordinated native 3.1.0 dependencies.
+  bridges, with Android 3.1.0 and Swift 3.1.1 or later in the compatible 3.x line.
+- Require the Swift native deadline fix so cancellation does not wait for a late URLSession callback.
 - Validate owned before-send replacements against the complete canonical event
   contract, retain allowed event/SDK metadata changes, and repeat privacy and
   bounded association checks before native handoff.
