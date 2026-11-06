@@ -39,7 +39,12 @@ export function validateNativeReleaseVersions(versions) {
     if (versions[key] !== versions.wrapper) issues.push(`wrapper_version_mismatch:${key}`);
   }
   if (versions.iosDependency !== `~> ${major}.0`) issues.push("ios_dependency_unprotected");
-  if (!versions.iosMinimum || versions.iosGit !== versions.iosMinimum) issues.push("ios_git_dependency_mismatch");
+  const minimum = /^([0-9]+)\.([0-9]+)\.([0-9]+)$/.exec(versions.iosMinimum ?? "")?.slice(1).map(Number);
+  const gitVersion = /^([0-9]+)\.([0-9]+)\.([0-9]+)$/.exec(versions.iosGit ?? "")?.slice(1).map(Number);
+  if (!minimum || !gitVersion || minimum[0] !== major || gitVersion[0] !== major ||
+      gitVersion[1] < minimum[1] || (gitVersion[1] === minimum[1] && gitVersion[2] < minimum[2])) {
+    issues.push("ios_git_dependency_mismatch");
+  }
   const androidMajor = Number(/^([0-9]+)\./.exec(versions.androidGradle)?.[1]);
   if (!Number.isInteger(androidMajor) || androidMajor < 3 || androidMajor !== major) {
     issues.push("android_dependency_unprotected");
