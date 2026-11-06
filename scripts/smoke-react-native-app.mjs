@@ -7,7 +7,8 @@ import { spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   iosSceneManifestFragment,
-  renderIosRuntimeAppDelegate
+  renderIosRuntimeAppDelegate,
+  renderExpoIosRuntimeAppDelegate
 } from "./ios-runtime-lifecycle.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -361,14 +362,14 @@ function patchIosPodfile() {
         "  <key>NSAppTransportSecurity</key>\n  <dict>\n    <key>NSAllowsLocalNetworking</key>\n    <true/>\n  </dict>\n</dict>"
       );
     }
-    if (!expoDevelopmentBuild && !infoPlist.includes("UIApplicationSceneManifest")) {
+    if (!infoPlist.includes("UIApplicationSceneManifest")) {
       infoPlist = infoPlist.replace(
         "</dict>\n</plist>",
         `${iosSceneManifestFragment}\n</dict>\n</plist>`
       );
     }
     writeFileSync(infoPlistPath, infoPlist);
-    if (!expoDevelopmentBuild) patchIosRuntimeLifecycle();
+    patchIosRuntimeLifecycle();
   }
 }
 
@@ -383,7 +384,7 @@ function patchIosRuntimeLifecycle() {
   }
   writeFileSync(
     appDelegatePath,
-    renderIosRuntimeAppDelegate(projectName)
+    expoDevelopmentBuild ? renderExpoIosRuntimeAppDelegate(appDelegate) : renderIosRuntimeAppDelegate(projectName)
   );
 }
 
