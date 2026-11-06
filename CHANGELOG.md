@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-11-06
+
+- Resolve Swift 3.1.2 through an immutable Git CocoaPods source. Expo prebuild configures it idempotently, preserving explicit consumer declarations; bare consumers add the documented Podfile declaration. Require Android 3.1.1 and retain published native consumer gates.
+
+- Preserve native JS errors and causes in console.error records. Avoid a second capture when the previous ErrorUtils handler synchronously echoes the exact Error to console; preserve host output.
+- Existing event schemas remain compatible; complete exception inputs may create new future fingerprints. Consumer installations require an explicit upgrade.
+
 ### 3.1.0 — 2026-11-01
 
 - Reuse bounded custom privacy patterns and sensitive-key lookups within each

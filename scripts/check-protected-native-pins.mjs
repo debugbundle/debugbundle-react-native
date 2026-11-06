@@ -17,6 +17,8 @@ export function readNativeReleaseVersions() {
     wrapper: JSON.parse(source("package.json")).version,
     podspec: extract("DebugBundleReactNative.podspec", /s\.version\s*=\s*"([^"]+)"/),
     iosDependency: extract("DebugBundleReactNative.podspec", /s\.dependency "DebugBundle", "([^"]+)"/),
+    iosMinimum: extract("DebugBundleReactNative.podspec", /s\.dependency "DebugBundle", "[^"]+", ">= ([^"]+)"/),
+    iosGit: extract("native-pod.js", /swiftNativeVersion = "([^"]+)"/),
     androidGradle: extract("android/build.gradle", /debugBundleAndroidVersion = [^\n]*\?: "([^"]+)"/),
     androidRelease: extract("Makefile", /^ANDROID_NATIVE_RELEASE_VERSION \?= (\S+)/m),
     androidSmoke: extract("scripts/smoke-react-native-app.mjs", /publishedAndroidVersion = [^\n]*\?\? "([^"]+)"/),
@@ -37,6 +39,7 @@ export function validateNativeReleaseVersions(versions) {
     if (versions[key] !== versions.wrapper) issues.push(`wrapper_version_mismatch:${key}`);
   }
   if (versions.iosDependency !== `~> ${major}.0`) issues.push("ios_dependency_unprotected");
+  if (!versions.iosMinimum || versions.iosGit !== versions.iosMinimum) issues.push("ios_git_dependency_mismatch");
   const androidMajor = Number(/^([0-9]+)\./.exec(versions.androidGradle)?.[1]);
   if (!Number.isInteger(androidMajor) || androidMajor < 3 || androidMajor !== major) {
     issues.push("android_dependency_unprotected");

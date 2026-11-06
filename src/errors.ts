@@ -1,4 +1,5 @@
 import type { DebugBundleClient } from "./types.js";
+import { withReportingError } from "./automatic-error.js";
 
 export interface ErrorHandlerInstallOptions {
   captureUnhandledRejections?: boolean;
@@ -19,11 +20,12 @@ export function installDebugBundleErrorHandlers(
   if (errorUtils?.setGlobalHandler) {
     const previousHandler = errorUtils.getGlobalHandler?.();
     errorUtils.setGlobalHandler((error, isFatal) => {
-      client.captureException(error, {
-        source: "react-native-global-error",
-        fatal: Boolean(isFatal)
+      withReportingError(error, () => {
+        try {
+          client.captureException(error, { source: "react-native-global-error", fatal: Boolean(isFatal) });
+        } catch { /* Instrumentation cannot prevent the host handler. */ }
+        previousHandler?.(error, isFatal);
       });
-      previousHandler?.(error, isFatal);
     });
     restores.push(() => {
       if (previousHandler) {

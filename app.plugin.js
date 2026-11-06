@@ -1,4 +1,5 @@
-import { createRunOncePlugin, withAndroidManifest, withAppBuildGradle, withInfoPlist } from "@expo/config-plugins";
+import { createRunOncePlugin, withAndroidManifest, withAppBuildGradle, withInfoPlist, withPodfile } from "@expo/config-plugins";
+import { withNativePodSource } from "./native-pod.js";
 
 function withDebugBundle(config, props = {}) {
   const iosEnabled = props.ios !== false;
@@ -9,6 +10,13 @@ function withDebugBundle(config, props = {}) {
       expoConfig.modResults.DebugBundleEnabled = true;
       return expoConfig;
     });
+    if (props.iosNativeSource !== "manual") {
+      config = withPodfile(config, (expoConfig) => {
+        if (expoConfig.modResults.language !== "rb") throw new Error("DebugBundle supports Ruby Podfiles");
+        expoConfig.modResults.contents = withNativePodSource(expoConfig.modResults.contents);
+        return expoConfig;
+      });
+    }
   }
 
   if (androidEnabled) {
@@ -49,4 +57,4 @@ function withAndroidDesugaring(contents) {
   return next;
 }
 
-export default createRunOncePlugin(withDebugBundle, "@debugbundle/sdk-react-native", "3.1.0");
+export default createRunOncePlugin(withDebugBundle, "@debugbundle/sdk-react-native", "3.1.1");

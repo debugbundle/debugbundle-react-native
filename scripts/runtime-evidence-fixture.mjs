@@ -94,7 +94,7 @@ async function startMockIngestion() {
       if (
         event?.schema_version !== "2026-03-01" ||
         event?.sdk_name !== "@debugbundle/sdk-react-native" ||
-        event?.sdk_version !== "3.1.0" ||
+        event?.sdk_version !== "3.1.1" ||
         event?.service?.name !== "rn-runtime-smoke" ||
         event?.service?.environment !== "test" ||
         event?.event_type !== "diagnostic_context" && event?.context?.release_stage !== "smoke" ||
@@ -102,7 +102,7 @@ async function startMockIngestion() {
       ) {
         runtimeRequestDiagnostics.push(`invalid_event_contract:${JSON.stringify({
           type: event?.event_type, schema: event?.schema_version === "2026-03-01",
-          sdk: event?.sdk_name === "@debugbundle/sdk-react-native", version: event?.sdk_version === "3.1.0",
+          sdk: event?.sdk_name === "@debugbundle/sdk-react-native", version: event?.sdk_version === "3.1.1",
           service: event?.service?.name === "rn-runtime-smoke", environment: event?.service?.environment === "test",
           context: event?.context?.release_stage === "smoke", canonical: canonicalEvent(ownJSON(event)),
           shape: canonicalShape(ownJSON(event)),

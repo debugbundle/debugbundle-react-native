@@ -11,6 +11,19 @@ describe("console capture", () => {
     console.error = originalError;
   });
 
+  it("retains native console exceptions with their cause and only one capture", () => {
+    console.error = vi.fn();
+    const captureLog = vi.fn();
+    const captureException = vi.fn();
+    const error = new Error("outer", { cause: new Error("inner") });
+    const restore = captureDebugBundleConsole({ captureLog, captureException });
+    try {
+      console.error("operation failed", error);
+      expect(captureException).toHaveBeenCalledExactlyOnceWith(error, { source: "console", log_message: "operation failed" });
+      expect(captureLog).not.toHaveBeenCalled();
+    } finally { restore(); }
+  });
+
   it("captures warn and error without swallowing host console output", () => {
     const captureLog = vi.fn();
     const hostWarn = vi.fn();

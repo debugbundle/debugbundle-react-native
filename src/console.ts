@@ -1,8 +1,10 @@
 import type { DebugBundleClient, DebugBundleLogLevel } from "./types.js";
+import { isReportingError } from "./automatic-error.js";
 
 let restoreConsole: (() => void) | null = null;
 
 export function captureDebugBundleConsole(client: Pick<DebugBundleClient, "captureLog"> & {
+  captureException?: DebugBundleClient["captureException"];
   isLogEnabled?: (level: DebugBundleLogLevel) => boolean;
 }): () => void {
   if (restoreConsole) {
@@ -33,6 +35,12 @@ export function captureDebugBundleConsole(client: Pick<DebugBundleClient, "captu
     inCapture = true;
     try {
       if (client.isLogEnabled?.(level) === false) return;
+      const error = args.slice(0, 3).find(value => value instanceof Error);
+      if (level === "error" && error instanceof Error && client.captureException !== undefined) {
+        if (isReportingError(error)) return;
+        client.captureException(error, { source: "console", log_message: args.filter(value => typeof value === "string").join(" ") });
+        return;
+      }
       client.captureLog(args.map(String).join(" "), level, { source: "console" });
     } catch {
       // Console instrumentation must not change host logging behavior.

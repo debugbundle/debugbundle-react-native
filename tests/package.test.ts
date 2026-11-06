@@ -54,21 +54,24 @@ describe("repository package and release gates", () => {
   });
 
   it("keeps the wrapper and required native dependency release lines aligned", () => {
-    expect(packageJson.version).toBe("3.1.0");
-    expect(podspec).toContain('s.version      = "3.1.0"');
-    expect(podspec).toContain('s.dependency "DebugBundle", "~> 3.0", ">= 3.1.1"');
-    expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "3.1.0"');
-    expect(expoPlugin).toContain('"@debugbundle/sdk-react-native", "3.1.0"');
+    expect(packageJson.version).toBe("3.1.1");
+    expect(podspec).toContain('s.version      = "3.1.1"');
+    expect(podspec).toContain('s.dependency "DebugBundle", "~> 3.0", ">= 3.1.2"');
+    expect(androidBuildGradle).toContain('debugBundleAndroidVersion") ?: "3.1.1"');
+    expect(expoPlugin).toContain('"@debugbundle/sdk-react-native", "3.1.1"');
   });
 
   it("requires protected major native dependencies before the next release", () => {
     const protectedLine = {
-      wrapper: "3.1.0", podspec: "3.1.0", client: "3.1.0", expoPlugin: "3.1.0",
-      swiftBridge: "3.1.0", swiftBridgeFallback: "3.1.0",
-      androidBridge: "3.1.0", androidBridgeFallback: "3.1.0", iosDependency: "~> 3.0",
-      androidGradle: "3.1.0", androidRelease: "3.1.0", androidSmoke: "3.1.0"
+      wrapper: "3.1.1", podspec: "3.1.1", client: "3.1.1", expoPlugin: "3.1.1",
+      swiftBridge: "3.1.1", swiftBridgeFallback: "3.1.1",
+      androidBridge: "3.1.1", androidBridgeFallback: "3.1.1", iosDependency: "~> 3.0",
+      iosMinimum: "3.1.2", iosGit: "3.1.2",
+      androidGradle: "3.1.1", androidRelease: "3.1.1", androidSmoke: "3.1.1"
     };
     expect(validateNativeReleaseVersions(protectedLine)).toEqual([]);
+    expect(validateNativeReleaseVersions({ ...protectedLine, iosGit: "3.1.1" }))
+      .toContain("ios_git_dependency_mismatch");
     expect(validateNativeReleaseVersions({ ...protectedLine, iosDependency: "~> 1.3" }))
       .toContain("ios_dependency_unprotected");
     expect(validateNativeReleaseVersions({ ...protectedLine, androidGradle: "1.3.1" }))

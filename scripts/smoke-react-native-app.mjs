@@ -1,4 +1,5 @@
 import { runtimeCapabilities, runtimeIngestionFixture } from "./runtime-evidence-fixture.mjs";
+import { swiftPodDeclaration, withNativePodSource } from "../native-pod.js";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +25,7 @@ const projectName = "DebugBundleSmoke";
 const reactNativeVersion = process.env.RN_SMOKE_VERSION ?? "0.87.1";
 const cliVersion = process.env.RN_SMOKE_CLI_VERSION ?? "20.1.3";
 const usePublishedNativeSdk = process.env.RN_SMOKE_NATIVE_SOURCE === "published";
-const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "3.1.0";
+const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "3.1.1";
 
 const args = new Set(process.argv.slice(2));
 const platforms = args.has("--ios")
@@ -225,10 +226,12 @@ function configureExpoPlugin() {
   const appConfig = JSON.parse(readFileSync(appConfigPath, "utf8"));
   const plugins = Array.isArray(appConfig.expo?.plugins) ? appConfig.expo.plugins : [];
   if (!plugins.some((plugin) => plugin === "@debugbundle/sdk-react-native")) {
-    plugins.push("@debugbundle/sdk-react-native");
+    plugins.push(usePublishedNativeSdk ? "@debugbundle/sdk-react-native"
+      : ["@debugbundle/sdk-react-native", { iosNativeSource: "manual" }]);
   }
   appConfig.expo = {
     ...appConfig.expo,
+    name: projectName,
     plugins
   };
   writeFileSync(appConfigPath, `${JSON.stringify(appConfig, null, 2)}\n`);
@@ -334,6 +337,12 @@ function patchIosPodfile() {
   }
 
   const podfile = readFileSync(podfilePath, "utf8");
+  if (usePublishedNativeSdk) {
+    if (expoDevelopmentBuild && !podfile.includes(swiftPodDeclaration)) {
+      throw new Error("Expo prebuild did not install the public native Git source through the packaged plugin");
+    }
+    writeFileSync(podfilePath, withNativePodSource(podfile));
+  }
   if (!usePublishedNativeSdk && !podfile.includes("pod 'DebugBundle'")) {
     const escapedSwiftPath = swiftSdkRoot.replaceAll("'", "\\'");
     const patched = podfile.replace(
@@ -352,14 +361,14 @@ function patchIosPodfile() {
         "  <key>NSAppTransportSecurity</key>\n  <dict>\n    <key>NSAllowsLocalNetworking</key>\n    <true/>\n  </dict>\n</dict>"
       );
     }
-    if (!infoPlist.includes("UIApplicationSceneManifest")) {
+    if (!expoDevelopmentBuild && !infoPlist.includes("UIApplicationSceneManifest")) {
       infoPlist = infoPlist.replace(
         "</dict>\n</plist>",
         `${iosSceneManifestFragment}\n</dict>\n</plist>`
       );
     }
     writeFileSync(infoPlistPath, infoPlist);
-    patchIosRuntimeLifecycle();
+    if (!expoDevelopmentBuild) patchIosRuntimeLifecycle();
   }
 }
 

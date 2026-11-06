@@ -1,6 +1,6 @@
 {
   "name": "@debugbundle/sdk-react-native",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "React Native SDK for DebugBundle mobile event capture.",
   "license": "Apache-2.0",
   "type": "module",
@@ -46,6 +46,7 @@
     "src",
     "dist",
     "app.plugin.js",
+    "native-pod.js",
     "DebugBundleReactNative.podspec",
     "CHANGELOG.md",
     "README.md",

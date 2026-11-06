@@ -73,6 +73,8 @@ jobs:
       - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: make rn-smoke-ios-published
       - run: make rn-runtime-ios-published
+      - name: Published Swift dependency through Expo prebuild and runtime
+        run: RN_SMOKE_NATIVE_SOURCE=published node scripts/smoke-react-native-app.mjs --ios --expo --runtime
 
   publish:
     permissions:
