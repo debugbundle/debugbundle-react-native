@@ -26,7 +26,7 @@ const projectName = "DebugBundleSmoke";
 const reactNativeVersion = process.env.RN_SMOKE_VERSION ?? "0.87.1";
 const cliVersion = process.env.RN_SMOKE_CLI_VERSION ?? "20.1.3";
 const usePublishedNativeSdk = process.env.RN_SMOKE_NATIVE_SOURCE === "published";
-const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "3.1.1";
+const publishedAndroidVersion = process.env.DEBUGBUNDLE_ANDROID_VERSION ?? "3.1.2";
 
 const args = new Set(process.argv.slice(2));
 const platforms = args.has("--ios")
@@ -343,6 +343,12 @@ function patchIosPodfile() {
       throw new Error("Expo prebuild did not install the public native Git source through the packaged plugin");
     }
     writeFileSync(podfilePath, withNativePodSource(podfile));
+  }
+  if (!usePublishedNativeSdk && podfile.includes(swiftPodDeclaration)) {
+    // Candidate Expo fixtures use the exact local native archive too; the
+    // separately selected published lane continues to verify the public Git pin.
+    const escapedSwiftPath = swiftSdkRoot.replaceAll("'", "\\'");
+    writeFileSync(podfilePath, podfile.replace(swiftPodDeclaration, `pod 'DebugBundle', :path => '${escapedSwiftPath}'`));
   }
   if (!usePublishedNativeSdk && !podfile.includes("pod 'DebugBundle'")) {
     const escapedSwiftPath = swiftSdkRoot.replaceAll("'", "\\'");

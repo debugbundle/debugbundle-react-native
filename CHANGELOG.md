@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.2] - 2026-11-09
+
+- Redact standalone organisation invitation and ownership-transfer credentials from free text before retention or transport, using the shared 27-case privacy corpus. Preserve capture APIs, event schemas and supported platform floors.
+- Existing installations adopt this protection when explicitly upgraded.
+
 ## [3.1.1] - 2026-11-06
 
 - Support Swift 3.1.2 through an immutable Git CocoaPods source while retaining the compatible Swift >=3.1.1 minimum. Expo prebuild configures it idempotently, preserving explicit consumer declarations; bare consumers add the documented Podfile declaration. Require Android 3.1.1 and retain published native consumer gates.

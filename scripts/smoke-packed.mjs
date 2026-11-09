@@ -64,6 +64,15 @@ try {
         throw new Error("expected redacted context before native enqueue");
       }
 
+      for (const prefix of ["dbundle_invite_", "dbundle_org_invite_", "dbundle_org_transfer_"]) {
+        const secret = prefix + "syntheticcredential1234567890";
+        client.captureLog("credential " + secret, "error");
+        await client.flush();
+        if (JSON.stringify(nativeModule.events).includes(secret)) {
+          throw new Error("installed package retained an acceptance credential");
+        }
+      }
+
       let hookCalled = false;
       const hooked = createDebugBundleClient({ projectToken: "dbp_smoke", beforeSend(event) {
         hookCalled = true;

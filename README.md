@@ -1,6 +1,6 @@
 # DebugBundle React Native
 
-Patch 3.1.1 corrects native logger exception evidence and capture safety while preserving public APIs and event schemas. Upgrade the DebugBundle distribution to adopt the correction.
+Patch 3.1.2 protects invitation and organisation-transfer credentials in captured text while preserving public APIs and event schemas. Upgrade the DebugBundle distribution to adopt the protection.
 
 React Native SDK for DebugBundle mobile apps.
 
@@ -40,13 +40,13 @@ Published implementation:
 
 JSC compatibility is best-effort where the selected React Native lane still supports it. Hermes is the primary tested JavaScript engine.
 
-## Native iOS source for 3.1.1
+## Native iOS source for 3.1.2
 
 To use the latest native patch independently of Trunk, bare React Native apps add this source inside their
 application target in `ios/Podfile`:
 
 ```ruby
-pod 'DebugBundle', :git => 'https://github.com/debugbundle/debugbundle-swift.git', :tag => 'v3.1.2'
+pod 'DebugBundle', :git => 'https://github.com/debugbundle/debugbundle-swift.git', :tag => 'v3.1.3'
 ```
 
 The Expo config plugin adds this declaration during prebuild. It preserves an
@@ -164,7 +164,7 @@ checks.
 
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The 3.1.1 wrapper pins Android 3.1.1 and retains the Swift 3.1.1 minimum and recommends Git 3.1.2 or later within the compatible 3.x CocoaPods line. `make check-protected-native-pins` checks the wrapper, native pins and embedded SDK versions together. Publish only after the exact Android and Swift artifacts are available and their published-consumer checks pass. The release workflow compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The 3.1.2 wrapper pins Android 3.1.2 and retains the Swift 3.1.1 minimum and recommends Git 3.1.3 or later within the compatible 3.x CocoaPods line. `make check-protected-native-pins` checks the wrapper, native pins and embedded SDK versions together. Publish only after the exact Android and Swift artifacts are available and their published-consumer checks pass. The release workflow compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.
 
 Probe and context native calls share the event bridge's pending count and byte limits, including reserved exception capacity. Saturated auxiliary calls are discarded without evaluating probe suppliers. Probe labels are limited to 128 characters. Persistent JS context retains at most 50 fields with keys up to 128 characters, and field-sensitive privacy runs before local retention and native handoff. Throwing capture context accessors are withheld without escaping into application code. The native 3.x SDKs perform queue persistence on their bounded background workers; abrupt process termination before persistence completes can lose admitted events.
 
@@ -200,3 +200,12 @@ queue release are checked. The [V8 protocol](https://raw.githubusercontent.com/C
 defines sampling semantics. These facade measurements do not establish Hermes,
 Android ART or actual native bridge performance; the native qualification lanes
 remain separate.
+
+
+### Unreleased acceptance-credential privacy
+
+The source candidate also scrubs standalone `dbundle_invite_`,
+`dbundle_org_invite_` and `dbundle_org_transfer_` acceptance secrets before
+SDK-owned retention or transmission. See the [shared qualification record](https://github.com/debugbundle/debugbundle/blob/main/spec/business-credential-redaction.md).
+Published packages keep their released behaviour until the coordinated dependency
+and distribution checks are completed and a new version is published.
