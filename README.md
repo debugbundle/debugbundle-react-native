@@ -237,7 +237,7 @@ The SDK scrubs standalone `dbundle_invite_`,
 SDK-owned retention or transmission. See the [shared qualification record](https://github.com/debugbundle/debugbundle/blob/main/spec/business-credential-redaction.md).
 Existing installations receive this protection when upgraded to a version that includes it.
 
-### Hook size limits (unreleased correction)
+### Hook size limits
 
 A hook replacement whose optional exception evidence exceeds the combined 32 KiB
 UTF-8 JSON budget keeps its replacement message and other primary fields. The SDK
