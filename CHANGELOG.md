@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.4] - 2026-11-15
+
+- Preserve invalid-return fallback when optional evidence is both malformed and oversized; cover mixed evidence fields with the shared hook-budget corpus.
+
+- Preserve application `beforeSend` redaction when optional exception evidence exceeds the combined 32 KiB UTF-8 JSON limit. Reduce optional evidence before invalid-return fallback, retain the replacement primary and ordinary custom context, and remove a related typed reference. Exact-boundary and malformed-return regressions cover the unchanged receiving contract.
+
+
 ## [3.1.3] - 2026-11-15
 
 - Select the qualified Android 3.1.3 and Swift Git 3.1.4 native documentation patches; retain the existing supported native floor.

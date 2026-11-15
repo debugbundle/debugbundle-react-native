@@ -18,7 +18,27 @@ const fits = (value: OwnedJSON | undefined, maximum: number): boolean => value =
   typeof value === "string" && value.length <= maximum && utf8Bytes(value) <= maximum;
 const size = (value: unknown): number => utf8Bytes(JSON.stringify(value));
 
-function graph(value: OwnedJSON): boolean {
+/** Bounded owned JSON only: optional byte limits must not undo owner redaction. */
+export function fitHookEvidence(value: OwnedJSON): OwnedJSON {
+  const event = jsonObject(value), payload = jsonObject(event?.payload);
+  if (!event || !payload || !["backend_exception", "frontend_exception"].includes(String(event.event_type))) return value;
+  const fields = ["exception_evidence", "execution", "resource_observations"].filter(field => Object.hasOwn(payload, field));
+  if (!fields.length) return value;
+  if (Object.hasOwn(event, "context") && !jsonObject(event.context)) return value;
+  const additions = Object.fromEntries(fields.map(field => [field, payload[field]!]));
+  const context = { ...jsonObject(event.context) };
+  const typed = evidenceReference(context.evidence_reference);
+  if (typed) additions.evidence_reference = context.evidence_reference!;
+  if (size(additions) <= 32_768) return value;
+  if (!validCanonicalEvent(value, false)) return value;
+  const reduced = { ...payload };
+  for (const field of fields) delete reduced[field];
+  if (typed) delete context.evidence_reference;
+  context.evidence_limits = { version: 1, ...Object.fromEntries(fields.map(field => [field, "budget_exceeded"])) };
+  return { ...event, payload: reduced, context };
+}
+
+function graph(value: OwnedJSON, checkByteBudget: boolean): boolean {
   const graph = jsonObject(value)!;
   const nodes = graph.nodes as Array<Record<string, OwnedJSON>>;
   const edges = new Map<number, Array<Record<string, OwnedJSON>>>();
@@ -45,7 +65,7 @@ function graph(value: OwnedJSON): boolean {
     for (const child of edges.get(id)!) if (!visit(child.target_id as number, depth + 1)) return false;
     active.delete(id); return true;
   };
-  return visit(graph.root_id as number, 0) && reached.size === nodes.length && size(value) <= 32_768;
+  return visit(graph.root_id as number, 0) && reached.size === nodes.length && (!checkByteBudget || size(value) <= 32_768);
 }
 
 function resourceURL(value: string): boolean {
@@ -66,6 +86,10 @@ function resources(value: OwnedJSON): boolean {
 
 /** Semantic refinements accompany the generated schema, as in every native SDK. */
 export function canonicalEvent(value: OwnedJSON): boolean {
+  return validCanonicalEvent(value, true);
+}
+
+function validCanonicalEvent(value: OwnedJSON, checkByteBudget: boolean): boolean {
   if (!canonicalShape(value)) return false;
   const event = jsonObject(value)!, payload = jsonObject(event.payload)!;
   const type = event.event_type;
@@ -89,12 +113,12 @@ export function canonicalEvent(value: OwnedJSON): boolean {
     const item = payload[field];
     if (item === undefined) continue;
     if (!(type === "backend_exception" && field !== "resource_observations" || type === "frontend_exception" && field !== "execution")) return false;
-    if (field === "exception_evidence" && !graph(item) || field === "execution" && !fits(jsonObject(item)?.name, 128) ||
+    if (field === "exception_evidence" && !graph(item, checkByteBudget) || field === "execution" && !fits(jsonObject(item)?.name, 128) ||
       field === "resource_observations" && !resources(item)) return false;
     additions[field] = item;
   }
   if (!Object.keys(additions).length) return true;
   const ref = jsonObject(event.context)?.evidence_reference;
   if (evidenceReference(ref)) additions.evidence_reference = ref!;
-  return size(additions) <= 32_768;
+  return !checkByteBudget || size(additions) <= 32_768;
 }

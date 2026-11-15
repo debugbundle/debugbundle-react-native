@@ -9,6 +9,32 @@ const corpus = JSON.parse(readFileSync(new URL("./fixtures/evidence-wire-cases.j
 const original = structuredClone(corpus.events.find((item: { valid: boolean }) => item.valid).event) as DebugBundleEventEnvelope;
 
 describe("canonical native JS hook ownership", () => {
+  const budgets = JSON.parse(readFileSync(new URL("./fixtures/before-send-budget.json", import.meta.url), "utf8"));
+  it.each(budgets.cases)("preserves owner policy at the shared byte boundary: $id", (fixture: { event: DebugBundleEventEnvelope; outcome: string; id: string }) => {
+    const result = applyBeforeSend(budgets.original, () => fixture.event);
+    expect(result?.payload.message).toBe(fixture.outcome === "fallback" ? "owner removed" : "owner replacement");
+    expect(canonicalEvent(ownJSON(result))).toBe(true);
+    if (fixture.outcome === "fallback") return;
+    expect(Object.hasOwn(result!.payload, "exception_evidence")).toBe(fixture.outcome === "keep");
+    expect(result?.context?.owner_field).toBe("preserved");
+    if (fixture.id.endsWith("-legacy")) expect(result?.context).toHaveProperty("evidence_reference");
+    if (fixture.id.endsWith("-typed") && fixture.outcome === "reduce") expect(result?.context).not.toHaveProperty("evidence_reference");
+  });
+
+  it("reduces combined evidence without restoring owner removed content", () => {
+    const replacement = structuredClone(corpus.events.find((item: { id: string }) => item.id === "combined_optional_bytes").event);
+    replacement.payload.message = "owner replacement";
+    const result = applyBeforeSend(original, () => replacement);
+    expect(result?.payload.message).toBe("owner replacement");
+    expect(canonicalEvent(ownJSON(result))).toBe(true);
+    expect(result?.payload.exception_evidence).toBeUndefined();
+    expect(replacement.payload.exception_evidence).toBeDefined();
+    for (const context of [null, "invalid", []]) {
+      replacement.context = context;
+      expect(applyBeforeSend(original, () => replacement)).toEqual(original);
+    }
+  });
+
   it("owns mutable plain JSON without invoking getters or foreign formatters", () => {
     const input = { array: [{ value: "original" }], alias: { value: 1 } };
     const owned = ownJSON(input);

@@ -1,5 +1,5 @@
 // Resolve the native SDK without requiring a new CocoaPods Trunk catalogue entry.
-export const swiftNativeVersion = "3.1.4";
+export const swiftNativeVersion = "3.1.5";
 export const swiftPodDeclaration = `pod 'DebugBundle', :git => 'https://github.com/debugbundle/debugbundle-swift.git', :tag => 'v${swiftNativeVersion}'`;
 
 export function withNativePodSource(contents) {

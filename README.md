@@ -1,6 +1,6 @@
 # DebugBundle React Native
 
-Patch 3.1.3 protects invitation and organisation-transfer credentials in captured text while preserving public APIs and event schemas. Upgrade the DebugBundle distribution to adopt the protection.
+Patch 3.1.4 preserves application hook redaction under optional-evidence limits and adopts the corrected native SDKs. Public capture APIs and event schemas remain compatible.
 
 React Native SDK for DebugBundle mobile apps.
 
@@ -165,13 +165,13 @@ Published implementation:
 
 JSC compatibility is best-effort where the selected React Native lane still supports it. Hermes is the primary tested JavaScript engine.
 
-## Native iOS source for 3.1.3
+## Native iOS source for 3.1.4
 
 To use the latest native patch independently of Trunk, bare React Native apps add this source inside their
 application target in `ios/Podfile`:
 
 ```ruby
-pod 'DebugBundle', :git => 'https://github.com/debugbundle/debugbundle-swift.git', :tag => 'v3.1.4'
+pod 'DebugBundle', :git => 'https://github.com/debugbundle/debugbundle-swift.git', :tag => 'v3.1.5'
 ```
 
 The Expo config plugin adds this declaration during prebuild. It preserves an
@@ -190,7 +190,7 @@ checks.
 
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The 3.1.3 wrapper pins Android 3.1.3 and retains the Swift 3.1.1 minimum and recommends Git 3.1.3 or later within the compatible 3.x CocoaPods line. `make check-protected-native-pins` checks the wrapper, native pins and embedded SDK versions together. Publish only after the exact Android and Swift artifacts are available and their published-consumer checks pass. The release workflow compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The 3.1.4 wrapper pins Android 3.1.4 and retains the Swift 3.1.1 minimum and recommends Git 3.1.5 or later within the compatible 3.x CocoaPods line. `make check-protected-native-pins` checks the wrapper, native pins and embedded SDK versions together. Publish only after the exact Android and Swift artifacts are available and their published-consumer checks pass. The release workflow compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.
 
 Probe and context native calls share the event bridge's pending count and byte limits, including reserved exception capacity. Saturated auxiliary calls are discarded without evaluating probe suppliers. Probe labels are limited to 128 characters. Persistent JS context retains at most 50 fields with keys up to 128 characters, and field-sensitive privacy runs before local retention and native handoff. Throwing capture context accessors are withheld without escaping into application code. The native 3.x SDKs perform queue persistence on their bounded background workers; abrupt process termination before persistence completes can lose admitted events.
 
@@ -236,3 +236,17 @@ The SDK scrubs standalone `dbundle_invite_`,
 `dbundle_org_invite_` and `dbundle_org_transfer_` acceptance secrets before
 SDK-owned retention or transmission. See the [shared qualification record](https://github.com/debugbundle/debugbundle/blob/main/spec/business-credential-redaction.md).
 Existing installations receive this protection when upgraded to a version that includes it.
+
+### Hook size limits (unreleased correction)
+
+A hook replacement whose optional exception evidence exceeds the combined 32 KiB
+UTF-8 JSON budget keeps its replacement message and other primary fields. The SDK
+omits the oversized optional evidence and its typed reference, recording
+`context.evidence_limits`. Ordinary custom context remains intact. A size limit
+must not restore text removed by the hook; an otherwise valid replacement that
+cannot fit later ownership or transport limits is withheld. Malformed returns and
+throwing hooks retain the established protected-original fallback.
+
+### Internal SDK diagnostics
+
+Internal SDK failures do not use a separate maintainer-reporting channel. The JavaScript and native bridges keep their existing silent handling; local native status diagnostics inherit the Swift/Android implementation. Qualify the coordinated native dependency before release, including Swift's bounded safe rejection codes; wrapper tests with native stubs alone do not prove the installed native dependency.

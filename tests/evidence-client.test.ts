@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { createDebugBundleClient } from "../src/client.js";
 import { createRecordingNativeModule, installRecordingNativeModule, resetDebugBundleNativeModule } from "../src/testing.js";
 
@@ -6,6 +7,33 @@ const proof = { version: 1, features: ["exception_evidence_v1", "resource_observ
 const failureRef = "11111111-1111-4111-8111-111111111111";
 const attemptId = "22222222-2222-4222-8222-222222222222";
 describe("mobile JS evidence through the existing bridge", () => {
+  it.each(["json", "object", "legacy"])("retains owner budget reduction and privacy through the %s carrier", async carrier => {
+    const native = createRecordingNativeModule({ status: "healthy", evidenceCapabilities: proof });
+    const wire: string[] = [];
+    if (carrier === "json") Object.assign(native, { enqueueCanonicalEventJson: (value: string) => { wire.push(value); return true; } });
+    if (carrier === "legacy") Object.assign(native, { enqueueCanonicalEvent: undefined });
+    installRecordingNativeModule(native);
+    const corpus = JSON.parse(readFileSync(new URL("./fixtures/evidence-wire-cases.json", import.meta.url), "utf8"));
+    const graph = corpus.events.find((item: { id: string }) => item.id === "combined_optional_bytes").event.payload.exception_evidence;
+    let calls = 0;
+    const client = createDebugBundleClient({ projectToken: "fictional", beforeSend(event) {
+      calls++;
+      event.payload.message = "owner replacement";
+      event.payload.stack = "Error: owner replacement";
+      event.payload.exception_evidence = graph;
+      event.context = { password: "HOOK_SECRET" };
+      return event;
+    } });
+    client.captureException(new Error("owner removed"));
+    await client.flush();
+    const emitted = carrier === "json" ? wire.map(value => JSON.parse(value)) : native.events;
+    expect(calls).toBe(1);
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]?.payload.message).toBe("owner replacement");
+    expect(JSON.stringify(emitted)).not.toMatch(/owner removed|HOOK_SECRET/);
+    expect(emitted[0]?.payload).not.toHaveProperty("exception_evidence");
+  });
+
   afterEach(resetDebugBundleNativeModule);
   it("prefers the lossless JSON carrier and preserves nullable evidence through native conversion", async () => {
     const native = createRecordingNativeModule({ status: "healthy", evidenceCapabilities: proof });
