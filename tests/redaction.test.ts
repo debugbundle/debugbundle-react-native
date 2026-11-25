@@ -245,7 +245,7 @@ describe("redaction", () => {
       timestamp: "2026-01-01T00:00:00.000Z",
       service: { name: "rn-app", environment: "production" },
       sdk_name: "@debugbundle/sdk-react-native",
-      sdk_version: "3.1.4",
+      sdk_version: "3.2.0",
       payload: {}
     };
 

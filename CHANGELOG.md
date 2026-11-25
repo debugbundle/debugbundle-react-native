@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-11-25
+
+- Add exact-key redaction across JavaScript and both native bridges.
+- Use Android SDK 3.2.0 and Swift SDK 3.2.0. Bare React Native uses the immutable Swift Git pod, and the Expo config plugin adds that source during prebuild.
+
 ## [3.1.4] - 2026-11-15
 
 - Preserve invalid-return fallback when optional evidence is both malformed and oversized; cover mixed evidence fields with the shared hook-budget corpus.

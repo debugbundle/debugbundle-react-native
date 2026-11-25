@@ -202,12 +202,12 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
     }
   }
 
-  private String currentSdkVersion = "3.1.4";
+  private String currentSdkVersion = "3.2.0";
   private String currentService = "react-native-app";
   private String currentEnvironment = "production";
 
   private DebugBundleConfig createConfig(ReadableMap config) {
-    currentSdkVersion = stringOrDefault(config, "sdkVersion", "3.1.4");
+    currentSdkVersion = stringOrDefault(config, "sdkVersion", "3.2.0");
     currentService = stringOrDefault(config, "service", "react-native-app");
     currentEnvironment = stringOrDefault(config, "environment", "production");
     return DebugBundleConfig.create(

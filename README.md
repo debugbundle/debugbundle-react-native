@@ -1,6 +1,6 @@
 # DebugBundle React Native
 
-Patch 3.1.4 preserves application hook redaction under optional-evidence limits and adopts the corrected native SDKs. Public capture APIs and event schemas remain compatible.
+Version 3.2.0 adds exact-key redaction in JavaScript and both native SDKs. Public capture APIs and event schemas remain compatible.
 
 React Native SDK for DebugBundle mobile apps.
 
@@ -165,17 +165,17 @@ Published implementation:
 
 JSC compatibility is best-effort where the selected React Native lane still supports it. Hermes is the primary tested JavaScript engine.
 
-## Native iOS source for 3.1.4
+## Native iOS source for 3.2.0
 
-To use the latest native patch independently of Trunk, bare React Native apps add this source inside their
-application target in `ios/Podfile`:
+Bare React Native apps add the required Swift 3.2.0 Git source inside their
+application target in `ios/Podfile` before running `pod install`:
 
 ```ruby
-pod 'DebugBundle', :git => 'https://github.com/debugbundle/debugbundle-swift.git', :tag => 'v3.1.5'
+pod 'DebugBundle', :git => 'https://github.com/debugbundle/debugbundle-swift.git', :tag => 'v3.2.0'
 ```
 
 The Expo config plugin adds this declaration during prebuild. It preserves an
-explicit `DebugBundle` declaration; existing pins to Swift `>=3.1.1` remain compatible. Advanced consumers managing the native source themselves may set
+explicit `DebugBundle` declaration. Update any explicit pin to Swift 3.2.0 or a compatible newer Swift 3.x version before upgrading this wrapper. Advanced consumers managing the native source themselves may set
 `["@debugbundle/sdk-react-native", { "iosNativeSource": "manual" }]`.
 Existing Trunk pods remain available. New versions resolve from immutable Git
 without requiring a new Trunk write. Expo Go still cannot load native modules.
@@ -190,7 +190,7 @@ checks.
 
 ## Release
 
-The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The 3.1.4 wrapper pins Android 3.1.4 and retains the Swift 3.1.1 minimum and recommends Git 3.1.5 or later within the compatible 3.x CocoaPods line. `make check-protected-native-pins` checks the wrapper, native pins and embedded SDK versions together. Publish only after the exact Android and Swift artifacts are available and their published-consumer checks pass. The release workflow compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.
+The package publishes to npm from `v*` tags through GitHub Actions. Configure an npm GitHub Actions trusted publisher for `debugbundle/debugbundle-react-native` and `release.yml`, with a blank environment and direct `npm publish` enabled. Publishing uses OIDC without a long-lived npm token. Make sure the tag matches `package.json` exactly. The 3.2.0 wrapper pins Android 3.2.0 and requires Swift 3.2.0 or a compatible newer Swift 3.x release. `make check-protected-native-pins` checks the wrapper, native pins and embedded SDK versions together. Publish only after the exact Android and Swift artifacts are available and their published-consumer checks pass. The release workflow compiles and runs clean apps against those published artifacts on Android API 37 and Xcode 27 before npm publication.
 
 Probe and context native calls share the event bridge's pending count and byte limits, including reserved exception capacity. Saturated auxiliary calls are discarded without evaluating probe suppliers. Probe labels are limited to 128 characters. Persistent JS context retains at most 50 fields with keys up to 128 characters, and field-sensitive privacy runs before local retention and native handoff. Throwing capture context accessors are withheld without escaping into application code. The native 3.x SDKs perform queue persistence on their bounded background workers; abrupt process termination before persistence completes can lose admitted events.
 
