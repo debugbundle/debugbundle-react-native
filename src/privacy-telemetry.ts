@@ -11,6 +11,7 @@ const MAX_TOTAL_BYTES = 256 * 1024;
 
 export interface TelemetrySanitizationOptions {
   additionalKeys?: readonly string[];
+  exactKeys?: readonly string[];
   maxTotalBytes?: number;
 }
 
@@ -141,7 +142,12 @@ function sanitizeValue(value: unknown, state: WorkState, depth: number, allowStr
 export function sanitizeTelemetry(value: unknown, options: TelemetrySanitizationOptions = {}): TelemetrySanitizationResult {
   try {
     const extra = options.additionalKeys ?? [];
-    if (extra.length > 128 || extra.some((key) => typeof key !== "string" || key.length > 64 || !key.trim())) {
+    const exact = options.exactKeys ?? [];
+    if (
+      extra.length + exact.length > 128 ||
+      extra.some((key) => typeof key !== "string" || key.length > 64 || !key.trim()) ||
+      exact.some((key) => typeof key !== "string" || key.length > 64 || !key.trim())
+    ) {
       return { ok: false, reason: "unsafe_input" };
     }
     const maxTotalBytes = options.maxTotalBytes ?? MAX_TOTAL_BYTES;
@@ -153,8 +159,8 @@ export function sanitizeTelemetry(value: unknown, options: TelemetrySanitization
       textBytes: 0,
       redactionCount: 0,
       seen: new WeakSet<object>(),
-      sensitiveKey: createSensitiveKeyMatcher([...DEFAULT_SENSITIVE_KEYS, ...extra]),
-      scrubText: createCredentialTextScrubber(extra),
+      sensitiveKey: createSensitiveKeyMatcher([...DEFAULT_SENSITIVE_KEYS, ...extra], exact),
+      scrubText: createCredentialTextScrubber(extra, exact),
       maxTotalBytes
     };
     const sanitized = sanitizeValue(value, state, 0, true);

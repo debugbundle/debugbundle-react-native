@@ -52,7 +52,7 @@ final class DebugBundleReactNative: NSObject {
 			captureExceptionEvidence: config["captureExceptionEvidence"] as? Bool ?? true,
 			captureRecoveryObservations: config["captureRecoveryObservations"] as? Bool ?? false,
 			evidenceCapabilities: evidenceCapabilities(config["evidenceCapabilities"])
-		))
+		)).withRedactExactFields(stringSet(config["redactExactFields"], fallback: []))
 		DebugBundle.initialize(sdkConfig, transport: DebugBundleHTTPTransport())
 		resolve(state())
 	}

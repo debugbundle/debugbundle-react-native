@@ -8,8 +8,8 @@ import { snapshotError, snapshotExceptionEvidence } from "./exception-evidence.j
 import type { EvidenceCapabilities, OperationScope, RecoveryObservation } from "./evidence-types.js";
 import { getNativeModule, degradedNativeState, safeNativeCall } from "./native.js";
 import { applyBeforeSend } from "./before-send.js";
+import { protectEventFields } from "./event-privacy.js";
 import { defaultRedactFields, DEFAULT_HEADER_ALLOWLIST, sanitizeHeaders, sanitizeValue } from "./redaction.js";
-import { sanitizeTelemetry } from "./privacy-telemetry.js";
 import type {
   DebugBundleCaptureContext,
   DebugBundleClient,
@@ -42,39 +42,6 @@ const LOG_LEVELS: Record<DebugBundleLogLevel, number> = {
   error: 40,
   critical: 50
 };
-
-function protectEventFields(
-  event: DebugBundleEventEnvelope,
-  additionalKeys: string[]
-): DebugBundleEventEnvelope | null {
-  // Preserve typed identities only when their scalar values pass the mandatory policy.
-  for (const value of [event.schema_version, event.sdk_name, event.sdk_version,
-    ...Object.values(event.correlation ?? {})]) {
-    if (typeof value !== "string") continue;
-    const checked = sanitizeTelemetry(value, { additionalKeys });
-    if (!checked.ok || checked.value !== value) return null;
-  }
-  const result = sanitizeTelemetry({
-    service: event.service,
-    payload: event.payload,
-    ...(event.context ? { context: event.context } : {})
-  }, { additionalKeys });
-  if (!result.ok || !result.value || typeof result.value !== "object" || Array.isArray(result.value)) {
-    return null;
-  }
-  const safeFields = result.value as Record<string, unknown>;
-  if (!safeFields.service || !safeFields.payload ||
-      typeof safeFields.service !== "object" || Array.isArray(safeFields.service) ||
-      typeof safeFields.payload !== "object" || Array.isArray(safeFields.payload)) {
-    return null;
-  }
-  return {
-    ...event,
-    service: safeFields.service as DebugBundleEventEnvelope["service"],
-    payload: safeFields.payload as Record<string, unknown>,
-    ...(event.context ? { context: safeFields.context as Record<string, unknown> } : {})
-  };
-}
 
 export class DebugBundleReactNativeClient implements DebugBundleClient {
   private config: ResolvedDebugBundleConfig;
@@ -162,10 +129,18 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     if (!this.config.captureErrors || !this.canCapture("frontend_exception", false) ||
         !this.hasNativeCapacity(true)) return;
     const mergedContext = this.evidence.context(this.mergeContext(context), this.nativeState, this.hasCanonicalBridge());
-    const sanitizedError = snapshotError(error, this.config.redactFields);
+    const sanitizedError = snapshotError(error, this.config.redactFields, this.config.redactExactFields);
     const fatal = mergedContext.source === "react-native-global-error" && mergedContext.fatal === true;
     const graph = this.evidenceCapabilities.features.includes("exception_evidence_v1")
-      ? snapshotExceptionEvidence(error, sanitizedError, this.config.redactFields, fatal) : undefined;
+      ? snapshotExceptionEvidence(error, sanitizedError, this.config.redactFields, fatal, undefined, this.config.redactExactFields) : undefined;
+    const { evidence_reference: preservedEvidenceRef, ...restContext } = mergedContext;
+    const sanitizedContext = asRecord(sanitizeValue(restContext, {
+      redactFields: this.config.redactFields,
+      redactExactFields: this.config.redactExactFields
+    }));
+    if (preservedEvidenceRef !== undefined) {
+      sanitizedContext.evidence_reference = preservedEvidenceRef;
+    }
     this.enqueue("frontend_exception", {
       name: stringValue(sanitizedError.name) ?? "Error",
       message: stringValue(sanitizedError.message) ?? "Unknown error",
@@ -173,9 +148,7 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
       breadcrumbs: this.breadcrumbs.slice(),
       probe_data: this.snapshotProbeData(),
       ...(graph ? { exception_evidence: graph } : {})
-    }, stringValue(mergedContext.trace_id), false, asRecord(sanitizeValue(mergedContext, {
-      redactFields: this.config.redactFields
-    })), this.config.captureErrors, !fatal, correlationFromContext(mergedContext));
+    }, stringValue(mergedContext.trace_id), false, sanitizedContext, this.config.captureErrors, !fatal, correlationFromContext(mergedContext));
   }
 
   captureError(error: unknown, context: DebugBundleCaptureContext = {}): void {
@@ -187,9 +160,9 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     const mergedContext = this.mergeContext(context);
     this.enqueue("log_event", {
       level,
-      message: sanitizeValue(message, { redactFields: this.config.redactFields }),
+      message: sanitizeValue(message, { redactFields: this.config.redactFields, redactExactFields: this.config.redactExactFields }),
       attributes: {
-        ...asRecord(sanitizeValue(mergedContext, { redactFields: this.config.redactFields })),
+        ...asRecord(sanitizeValue(mergedContext, { redactFields: this.config.redactFields, redactExactFields: this.config.redactExactFields })),
         source: "javascript"
       }
     }, stringValue(mergedContext.trace_id), true);
@@ -216,11 +189,13 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
       query: parsedUrl.query,
       route_template: request.routeTemplate ?? null,
       headers: sanitizeHeaders(request.headers, this.config.headerAllowlist, {
-        redactFields: this.config.redactFields
+        redactFields: this.config.redactFields,
+        redactExactFields: this.config.redactExactFields
       }),
       response_status: response.statusCode,
       response_headers: sanitizeHeaders(response.headers, this.config.headerAllowlist, {
-        redactFields: this.config.redactFields
+        redactFields: this.config.redactFields,
+        redactExactFields: this.config.redactExactFields
       }),
       duration_ms: response.durationMillis ?? 0
     };
@@ -230,15 +205,15 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
       payload,
       traceId,
       true,
-      asRecord(sanitizeValue(mergedContext, { redactFields: this.config.redactFields }))
+      asRecord(sanitizeValue(mergedContext, { redactFields: this.config.redactFields, redactExactFields: this.config.redactExactFields }))
     );
   }
 
   captureMessage(message: string, level: DebugBundleLogLevel = "warning", context: DebugBundleCaptureContext = {}): void {
     this.recordBreadcrumb("message", {
       level,
-      message: sanitizeValue(message, { redactFields: this.config.redactFields }),
-      context: sanitizeValue(this.mergeContext(context), { redactFields: this.config.redactFields })
+      message: sanitizeValue(message, { redactFields: this.config.redactFields, redactExactFields: this.config.redactExactFields }),
+      context: sanitizeValue(this.mergeContext(context), { redactFields: this.config.redactFields, redactExactFields: this.config.redactExactFields })
     });
   }
 
@@ -248,7 +223,7 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
         !Object.hasOwn(this.context, key) && Object.keys(this.context).length >= MAX_CONTEXT_FIELDS) return;
     try {
       // Include the field name in mandatory privacy before local or native ownership.
-      const fields = asRecord(sanitizeValue({ [key]: value }, { redactFields: this.config.redactFields }));
+      const fields = asRecord(sanitizeValue({ [key]: value }, { redactFields: this.config.redactFields, redactExactFields: this.config.redactExactFields }));
       if (!Object.hasOwn(fields, key)) return;
       const entry = { value: fields[key] };
       this.context = { ...this.context, [key]: entry.value };
@@ -271,7 +246,7 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
       const nativeProbeActive = nativeModule?.isProbeActive?.(label) ?? false;
       if (options.heavy && !nativeProbeActive && !this.hasActiveJsProbeActivation()) return;
       const value = typeof data === "function" ? safeInvoke(data as () => unknown) : data;
-      const sanitizedData = objectWrap(sanitizeValue(value, { redactFields: this.config.redactFields }));
+      const sanitizedData = objectWrap(sanitizeValue(value, { redactFields: this.config.redactFields, redactExactFields: this.config.redactExactFields }));
       const occurredAt = new Date().toISOString();
       const entry = { label, data: sanitizedData, timestamp: occurredAt, activation_id: null };
       const entries = this.probeBuffers.get(label) ?? [];
@@ -323,7 +298,7 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     const breadcrumb = {
       breadcrumb_type: type,
       ts: new Date().toISOString(),
-      data: sanitizeValue(data, { redactFields: this.config.redactFields })
+      data: sanitizeValue(data, { redactFields: this.config.redactFields, redactExactFields: this.config.redactExactFields })
     };
     this.breadcrumbs.push(breadcrumb);
     this.breadcrumbs = this.breadcrumbs.slice(-this.config.maxBreadcrumbs);
@@ -384,7 +359,7 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
         ...(context && Object.keys(context).length > 0 ? { context } : {}),
         payload: eventType === "diagnostic_context" ? payload : { ...payload, device: canonicalDevice(this.nativeState.device, this.config) }
       };
-      const initial = protectEventFields(authoredEvent, this.config.redactFields);
+      const initial = protectEventFields(authoredEvent, this.config.redactFields, this.config.redactExactFields);
       if (!initial) return;
       owner = initial.event_id;
       if (initial.event_type === "diagnostic_context" && (!canonicalEvent(ownJSON(initial)) || !this.evidence.budget.reserve(initial, owner))) return;
@@ -455,7 +430,7 @@ export class DebugBundleReactNativeClient implements DebugBundleClient {
     // replacement may be huge before projection and must not survive suspension.
     const event = applyBeforeSend(initial, runBeforeSend ? config.beforeSend : null);
     if (!event || this.config !== config) return null;
-    const safeEvent = protectEventFields(event, config.redactFields);
+    const safeEvent = protectEventFields(event, config.redactFields, config.redactExactFields);
     if (!safeEvent) return null;
     if (safeEvent.event_type === "log_event" &&
         (!config.captureLogs || !(LOG_LEVELS[safeEvent.payload.level as DebugBundleLogLevel] >= LOG_LEVELS[config.logLevel]))) return null;
@@ -559,6 +534,7 @@ export function resolveConfig(config: DebugBundleConfig): ResolvedDebugBundleCon
     maxProbeEntriesPerLabel: clampInteger(config.maxProbeEntriesPerLabel, 10, 1, 200),
     probeFlushOnError: config.probeFlushOnError ?? true,
     redactFields: config.redactFields ?? defaultRedactFields(),
+    redactExactFields: config.redactExactFields ?? [],
     headerAllowlist: config.headerAllowlist ?? DEFAULT_HEADER_ALLOWLIST,
     sdkVersion: config.sdkVersion ?? DEFAULT_SDK_VERSION,
     beforeSend: config.beforeSend ?? null

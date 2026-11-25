@@ -56,11 +56,21 @@ function scrubUrl(raw: string, scrub: (value: string, scanUrls?: boolean) => str
 }
 
 /** Compile each caller rule once per bounded protection operation, not per scalar. */
-export function createCredentialTextScrubber(additionalKeys: readonly string[]): (input: string, scanUrls?: boolean) => string {
-  const sensitive = createSensitiveKeyMatcher([...DEFAULT_SENSITIVE_KEYS, ...additionalKeys]);
-  const patterns = additionalKeys.map(key => {
+export function createCredentialTextScrubber(
+  additionalKeys: readonly string[],
+  exactKeys: readonly string[] = []
+): (input: string, scanUrls?: boolean) => string {
+  const sensitive = createSensitiveKeyMatcher([...DEFAULT_SENSITIVE_KEYS, ...additionalKeys], exactKeys);
+  const broadPatterns = additionalKeys.map(key => {
     const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return new RegExp(`\\b(${escaped})\\b(["']?\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|[^\\s&,;]+)`, "gi");
+  });
+  const exactPatterns = exactKeys.map(key => {
+    const escaped = key.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(
+      `(?<![A-Za-z0-9_-])(${escaped})(?![A-Za-z0-9_-])(["']?\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|[^\\s&,;]+)`,
+      "gi"
+    );
   });
   const scrub = (input: string, scanUrls = true): string => {
     if (PEM_START.test(input) && !PEM_COMPLETE.test(input)) return REDACTED;
@@ -75,7 +85,8 @@ export function createCredentialTextScrubber(additionalKeys: readonly string[]):
     output = output.replace(PEM, REDACTED).replace(HEADER, "$1: [REDACTED]");
     output = output.replace(BEARER, "$1 [REDACTED]").replace(DEBUGBUNDLE_TOKEN, REDACTED);
     output = output.replace(ASSIGNMENT, "$1$2[REDACTED]");
-    for (const pattern of patterns) output = output.replace(pattern, "$1$2[REDACTED]");
+    for (const pattern of broadPatterns) output = output.replace(pattern, "$1$2[REDACTED]");
+    for (const pattern of exactPatterns) output = output.replace(pattern, "$1$2[REDACTED]");
     output = output.replace(CARD, (candidate) => isValidCard(candidate) ? REDACTED : candidate);
     if (!scanUrls) return output;
     return output.replace(URL_TEXT, (matched) => {

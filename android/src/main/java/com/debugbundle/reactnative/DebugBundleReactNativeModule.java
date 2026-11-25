@@ -242,7 +242,8 @@ public final class DebugBundleReactNativeModule extends ReactContextBaseJavaModu
         currentSdkVersion).withEvidenceOptions(new DebugBundleEvidenceOptions(
             booleanOrDefault(config, "captureExceptionEvidence", true),
             booleanOrDefault(config, "captureRecoveryObservations", false),
-            evidenceCapabilities(config)));
+            evidenceCapabilities(config)))
+        .withRedactExactFields(stringSet(config, "redactExactFields", Collections.emptySet()));
   }
 
   private WritableMap stateMap() {

@@ -18,6 +18,7 @@ export const DEFAULT_HEADER_ALLOWLIST = [
 
 export interface SanitizeOptions {
   redactFields?: string[];
+  redactExactFields?: string[];
   maxDepth?: number;
   maxStringLength?: number;
   maxArrayLength?: number;
@@ -33,7 +34,10 @@ export function sanitizeValue(value: unknown, options: SanitizeOptions = {}): un
     const normalized = normalizeOptions(options);
     const visited = new WeakSet<object>();
     const prepared = sanitize(value, normalized, 0, visited, undefined);
-    const protectedValue = sanitizeTelemetry(prepared, { additionalKeys: options.redactFields ?? [] });
+    const protectedValue = sanitizeTelemetry(prepared, {
+      additionalKeys: options.redactFields ?? [],
+      exactKeys: options.redactExactFields ?? []
+    });
     return protectedValue.ok ? protectedValue.value : "[REDACTED]";
   } catch {
     return "[REDACTED]";
@@ -62,6 +66,7 @@ export function sanitizeHeaders(
 function normalizeOptions(options: SanitizeOptions): Required<SanitizeOptions> {
   return {
     redactFields: [...DEFAULT_REDACT_FIELDS, ...(options.redactFields ?? [])],
+    redactExactFields: [...(options.redactExactFields ?? [])],
     maxDepth: options.maxDepth ?? 8,
     maxStringLength: options.maxStringLength ?? 2048,
     maxArrayLength: options.maxArrayLength ?? 50,
@@ -76,14 +81,14 @@ function sanitize(
   visited: WeakSet<object>,
   key: string | undefined
 ): unknown {
-  if (key && isSensitiveKey(key, options.redactFields)) {
+  if (key && isSensitiveKey(key, options.redactFields, options.redactExactFields)) {
     return "[REDACTED]";
   }
   if (value === null || value === undefined) {
     return value ?? null;
   }
   if (typeof value === "string") {
-    return truncate(value, options.maxStringLength, options.redactFields);
+    return truncate(value, options.maxStringLength, options.redactFields, options.redactExactFields);
   }
   if (typeof value === "number" || typeof value === "boolean") {
     return value;
@@ -126,21 +131,21 @@ function sanitizeError(
   const name = errorField(error, "name"), message = errorField(error, "message");
   const stack = safeErrorStack(error), cause = Object.getOwnPropertyDescriptor(error, "cause");
   return {
-    name: truncate(typeof name === "string" && name ? name : "Error", options.maxStringLength, options.redactFields),
-    message: truncate(typeof message === "string" ? message : "", options.maxStringLength, options.redactFields),
-    stack: typeof stack === "string" ? truncate(stack, options.maxStringLength * 4, options.redactFields) : null,
+    name: truncate(typeof name === "string" && name ? name : "Error", options.maxStringLength, options.redactFields, options.redactExactFields),
+    message: truncate(typeof message === "string" ? message : "", options.maxStringLength, options.redactFields, options.redactExactFields),
+    stack: typeof stack === "string" ? truncate(stack, options.maxStringLength * 4, options.redactFields, options.redactExactFields) : null,
     cause: cause && "value" in cause ? sanitize(cause.value, options, depth + 1, visited, "cause") : null
   };
 }
 
-function truncate(value: string, maxLength: number, fields: string[]): string {
+function truncate(value: string, maxLength: number, fields: string[], exactFields: string[] = []): string {
   if (value.length > 16 * 1024) return "[REDACTED]";
-  const safe = sanitizeTelemetry(value, { additionalKeys: fields });
+  const safe = sanitizeTelemetry(value, { additionalKeys: fields, exactKeys: exactFields });
   if (!safe.ok || typeof safe.value !== "string") return "[REDACTED]";
   if (safe.value.length <= maxLength) return safe.value;
   return `${safe.value.slice(0, maxLength)}...[Truncated]`;
 }
 
-function isSensitiveKey(key: string, sensitiveFields: string[]): boolean {
-  return privacySensitiveKey(key, [...DEFAULT_SENSITIVE_KEYS, ...sensitiveFields]);
+function isSensitiveKey(key: string, sensitiveFields: string[], exactFields: string[] = []): boolean {
+  return privacySensitiveKey(key, [...DEFAULT_SENSITIVE_KEYS, ...sensitiveFields], exactFields);
 }

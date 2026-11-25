@@ -132,7 +132,7 @@ Confirm the event in DebugBundle and inspect its incident with the CLI. Mobile q
 
 ## Configuration
 
-Pass supported fields to `DebugBundle.init`. Runtime options override the resolved defaults. Set `tracePropagationTargets` only for first-party API origins; native queue limits, capture switches and privacy options remain explicit. The token source belongs to the app build configuration, not the SDK.
+Pass supported fields to `DebugBundle.init`. Runtime options override the resolved defaults. Set `tracePropagationTargets` only for first-party API origins; native queue limits, capture switches and privacy options remain explicit. Use `redactExactFields` to mask exact field names such as `"tag"` case-insensitively (ASCII) across JS and both native bridges without over-redacting compound keys like `"tag_name"`; existing broad `redactFields` and mandatory credential rules remain active. The token source belongs to the app build configuration, not the SDK.
 
 See the [configuration reference](https://github.com/debugbundle/debugbundle-react-native/blob/main/src/types.ts) for exact supported fields and the [universal SDK interface](https://debugbundle.com/docs/sdks/universal-interface) for shared concepts.
 

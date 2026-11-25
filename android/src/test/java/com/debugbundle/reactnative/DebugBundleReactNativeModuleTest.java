@@ -134,11 +134,14 @@ public final class DebugBundleReactNativeModuleTest {
         Map.entry("maxProbeLabels", 8),
         Map.entry("maxProbeEntriesPerLabel", 3),
         Map.entry("probeFlushOnError", false),
-        Map.entry("redactFields", List.of("password"))));
+        Map.entry("redactFields", List.of("password")),
+        Map.entry("redactExactFields", List.of("tag", "payout_code"))));
 
     module.initialize(config, promise);
 
-    verify(nativeOperations).initialize(eq(applicationContext), any(DebugBundleConfig.class));
+    ArgumentCaptor<DebugBundleConfig> configCaptor = ArgumentCaptor.forClass(DebugBundleConfig.class);
+    verify(nativeOperations).initialize(eq(applicationContext), configCaptor.capture());
+    assertEquals(java.util.Set.of("tag", "payout_code"), configCaptor.getValue().getRedactExactFields());
     verify(writableMap).putString("status", "online");
     verify(writableMap).putDouble("lastEventAt", 1_234.0);
     verify(writableMap).putBoolean("nativeModuleAvailable", true);

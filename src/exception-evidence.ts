@@ -7,7 +7,7 @@ type Frame = { function: string | null; file: string | null; line: number | null
 type Node = { id: number; name: string; message: string; stack: string | null; trace_origin: string; parsing_status: string;
   frames: Frame[]; relationships: Array<{ kind: "cause"; target_id: number }> };
 const text = (value: unknown, fallback: string): string => typeof value === "string" && value ? value : fallback;
-export function snapshotError(error: unknown, fields: string[]): LegacyError {
+export function snapshotError(error: unknown, fields: string[], exactFields: string[] = []): LegacyError {
   let name = "Error", message = "Unknown error", stack: unknown;
   try {
     if (typeof error === "string") message = error;
@@ -16,9 +16,9 @@ export function snapshotError(error: unknown, fields: string[]): LegacyError {
     }
   } catch { /* Legacy outer evidence is best effort; no application accessor is required. */ }
   return {
-    name: text(sanitizeValue(name, { redactFields: fields }), "Error"),
-    message: text(sanitizeValue(message, { redactFields: fields }), "Unknown error"),
-    stack: text(sanitizeValue(text(stack, `${name}: ${message}`), { redactFields: fields, maxStringLength: 8192 }), `${name}: ${message}`),
+    name: text(sanitizeValue(name, { redactFields: fields, redactExactFields: exactFields }), "Error"),
+    message: text(sanitizeValue(message, { redactFields: fields, redactExactFields: exactFields }), "Unknown error"),
+    stack: text(sanitizeValue(text(stack, `${name}: ${message}`), { redactFields: fields, redactExactFields: exactFields, maxStringLength: 8192 }), `${name}: ${message}`),
     traceAvailable: typeof stack === "string" && stack.length > 0
   };
 }
@@ -71,7 +71,7 @@ function stackLinks(stack: string): string {
  * without it retain the outer error and explicitly report unsupported traversal.
  * Portable JS cannot prove aggregate arrays are not proxies: no iterator is run. */
 export function snapshotExceptionEvidence(error: unknown, legacy: LegacyError, fields: string[], fatal = false,
-  brand = nativeBrand): Record<string, unknown> | undefined {
+  brand = nativeBrand, exactFields: string[] = []): Record<string, unknown> | undefined {
   const nodes: Node[] = [], seen = new Map<object, number>(), active = new Set<object>();
   let unsupported = brand === undefined, unsafe = false, truncated = false, totalFrames = 0;
   const visit = (value: unknown, depth: number, root = false): number | null => {
@@ -79,7 +79,7 @@ export function snapshotExceptionEvidence(error: unknown, legacy: LegacyError, f
     if (typeof value === "object" && value !== null && active.has(value)) { truncated = true; return null; }
     if (depth > (fatal ? 1 : 4) || nodes.length >= (fatal ? 2 : 8)) { truncated = true; return null; }
     if (!root && seen.has(value as object)) return seen.get(value as object)!;
-    const snapshot = root ? legacy : snapshotError(value, fields);
+    const snapshot = root ? legacy : snapshotError(value, fields, exactFields);
     const name = clip(snapshot.name, 256), message = clip(snapshot.message, fatal ? 512 : 2048);
     const stack = stackLinks(clip(snapshot.stack, fatal ? 512 : 16_384));
     const parsed = parseMobileStack(stack, fatal ? Math.min(4, 8 - totalFrames) : 32), frames = parsed.frames;

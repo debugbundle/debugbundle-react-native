@@ -42,6 +42,7 @@ export interface DebugBundleConfig {
   maxProbeEntriesPerLabel?: number;
   probeFlushOnError?: boolean;
   redactFields?: string[];
+  redactExactFields?: string[];
   headerAllowlist?: string[];
   sdkVersion?: string;
   beforeSend?: DebugBundleBeforeSend;
@@ -83,6 +84,7 @@ export interface ResolvedDebugBundleConfig {
   maxProbeEntriesPerLabel: number;
   probeFlushOnError: boolean;
   redactFields: string[];
+  redactExactFields: string[];
   headerAllowlist: string[];
   sdkVersion: string;
   beforeSend: DebugBundleBeforeSend | null;

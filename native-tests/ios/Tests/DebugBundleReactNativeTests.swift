@@ -66,6 +66,7 @@ final class DebugBundleReactNativeTests: XCTestCase {
 				"maxProbeEntriesPerLabel": 3,
 				"probeFlushOnError": false,
 				"redactFields": ["password"],
+				"redactExactFields": ["tag", "payout_code"],
 				"headerAllowlist": ["x-request-id"]
 			],
 			resolver: { resolved = $0 as? [String: Any] },
@@ -84,6 +85,7 @@ final class DebugBundleReactNativeTests: XCTestCase {
 		XCTAssertEqual(config.requestTimeout, 2.5)
 		XCTAssertEqual(config.offlineQueueTtl, 9)
 		XCTAssertEqual(config.logLevel, .debug)
+		XCTAssertEqual(config.redactExactFields, ["tag", "payout_code"])
 		XCTAssertEqual(config.tracePropagationTargets, ["api.example.test"])
 		XCTAssertEqual(resolved?["status"] as? String, "initialized")
 		XCTAssertEqual(resolved?["lastEventAt"] as? Double, 1_234_000)

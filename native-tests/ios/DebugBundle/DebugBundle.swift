@@ -29,7 +29,9 @@ public struct DebugBundleEvidenceOptions {
 
 public struct DebugBundleConfig {
     public var evidenceOptions = DebugBundleEvidenceOptions()
+    public var redactExactFields: Set<String> = []
     public func withEvidenceOptions(_ options: DebugBundleEvidenceOptions) -> Self { var copy = self; copy.evidenceOptions = options; return copy }
+    public func withRedactExactFields(_ fields: Set<String>) -> Self { var copy = self; copy.redactExactFields = fields; return copy }
 	public static let defaultEndpoint = URL(string: "https://api.debugbundle.com/v1/events")!
 	public static let defaultRedactFields: Set<String> = ["password", "token"]
 	public static let defaultHeaderAllowlist: Set<String> = ["content-type", "user-agent"]
